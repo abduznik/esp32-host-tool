@@ -108,17 +108,12 @@ DWORD WINAPI SerialReader(LPVOID lpParam)
     return 0;
 }
 
-int main() {
-    char portName[16];
+void run_monitor(const char* portName)
+{
     char inputBuffer[128];
     DWORD bytesWritten;
 
-    list_ports();
-
-    printf("\nEnter COM port (e.g, COM3): ");
-    scanf("%s", portName);
-    getchar();
-
+    printf("Initializing Monitor on %s... \n", portName);
     configure_port(portName);
 
     HANDLE hThread = CreateThread(NULL, 0, SerialReader, NULL, 0, NULL);
@@ -136,6 +131,42 @@ int main() {
 
     CloseHandle(hSerial);
     CloseHandle(hThread);
+}
+
+void flash_firmware(const char* portName)
+{
+    printf("\n TODO Flashing sequence");
+}
+
+int main() {
+    char portName[16];
+    int choice;
+
+    list_ports();
+
+    printf("\nEnter COM port (e.g, COM3): ");
+    scanf("%s", portName);
+
+    printf("\n--- Select Action ---\n"
+        "1. Serial Monitor\n"
+        "2. Flash Firmware\n"
+        "Choice: \n");
+
+    scanf("%d", &choice);
+    getchar();
+
+    switch (choice)
+    {
+        case 1:
+            run_monitor(portName);
+            break;
+        case 2:
+            flash_firmware(portName);
+            break;
+        default:
+            printf("Invalid Choice. Exiting. \n");
+            break;
+    }
 
     return 0;
 }
