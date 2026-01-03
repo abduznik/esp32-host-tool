@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 HANDLE hSerial;
 
@@ -135,7 +136,40 @@ void run_monitor(const char* portName)
 
 void flash_firmware(const char* portName)
 {
-    printf("\n TODO Flashing sequence");
+    FILE* f = fopen("firmware.bin", "rb");
+    if (f == NULL)
+    {
+        printf("\nError: 'firmware.bin' not found!\n");
+        printf("Please place your combined ESP32 binary in this folder and name it firmware.bin\n");
+        printf("Press Enter to exit...");
+        getchar();
+        return;
+    }
+    fclose(f);
+
+    char command[512];
+
+    // Using python -m esptool for this
+    snprintf(command, sizeof(command),
+        "python -m esptool --chip esp32 --port %s --baud 460800 write-flash -z 0x0 firmware.bin",
+        portName);
+    printf("\nInfo: Starting Flash Process on %s...\n", portName);
+    printf("Command: %s\n\n", command);
+
+    int result = system(command);
+
+    if (result == 0)
+    {
+        printf("\nSuccess! Firmware flashed successfully!\n");
+    }
+    else
+    {
+        printf("Fail! Flashing failed with code %d.\n", result);
+        printf("Ensure you have esptool installed 'pip install esptool'\n");
+    }
+    
+    printf("Press Enter to exit...");
+    getchar();
 }
 
 int main() {
