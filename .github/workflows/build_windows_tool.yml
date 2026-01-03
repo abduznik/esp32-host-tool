@@ -1,0 +1,72 @@
+name: Build All-In-One Tool
+
+on:
+  # 1. Allow manual trigger (keep this for testing)
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build'
+        required: true
+        default: 'v1.0.0'
+  # 2. Allow automatic trigger from the other repo
+  repository_dispatch:
+    types: [firmware_updated]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout Host Tool Code
+        uses: actions/checkout@v4
+
+      - name: Determine Version
+        shell: bash
+        run: |
+          # If triggered automatically, use the payload version. 
+          # If manual, use the input version.
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "BUILD_VERSION=${{ github.event.client_payload.version }}" >> $GITHUB_ENV
+          else
+            echo "BUILD_VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+          fi
+
+      - name: Download Firmware from Firmware Repo
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Downloading firmware version: $BUILD_VERSION"
+          
+          # We download the specific tag that was just released
+          gh release download "$BUILD_VERSION" -R abduznik/esp32-uart-cli -p "firmware.bin"
+          
+          if [ ! -f firmware.bin ]; then
+            echo "Error: firmware.bin not found for version $BUILD_VERSION!"
+            exit 1
+          fi
+
+      - name: Download Standalone Esptool
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/espressif/esptool/releases/download/v4.8.1/esptool-v4.8.1-win64.zip" -OutFile "esptool.zip"
+          Expand-Archive -Path "esptool.zip" -DestinationPath "esptool_extracted"
+          Move-Item -Path "esptool_extracted\esptool-win64\esptool.exe" -Destination "esptool.exe"
+
+      - name: Compile Resource File
+        run: windres resources.rc -o resources.o
+
+      - name: Compile Executable
+        run: gcc main.c resources.o -o SerialManagerTool.exe -static
+
+      - name: Create Release & Upload
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.BUILD_VERSION }}
+          name: "Windows Tool ${{ env.BUILD_VERSION }}"
+          files: SerialManagerTool.exe
+          draft: false
+          prerelease: false
