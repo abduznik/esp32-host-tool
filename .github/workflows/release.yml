@@ -1,0 +1,66 @@
+name: Build All-In-One Tool
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release Version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout Host Tool Code
+        uses: actions/checkout@v4
+
+      - name: Download Firmware from OTHER Repo
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Downloads 'firmware.bin' from the latest release of your firmware repo
+          # CHANGE THIS if your user/repo name is different
+          gh release download -R abduznik/esp32-uart-cli -p "firmware.bin"
+          
+          if [ ! -f firmware.bin ]; then
+            echo "Error: firmware.bin not found! Ensure the other repo has a release."
+            exit 1
+          fi
+          echo "Firmware downloaded successfully."
+
+      - name: Download Standalone Esptool
+        shell: powershell
+        run: |
+          # 1. Download official Esptool for Windows
+          Invoke-WebRequest -Uri "https://github.com/espressif/esptool/releases/download/v4.8.1/esptool-v4.8.1-win64.zip" -OutFile "esptool.zip"
+          
+          # 2. Extract
+          Expand-Archive -Path "esptool.zip" -DestinationPath "esptool_extracted"
+          
+          # 3. Move exe to root
+          Move-Item -Path "esptool_extracted\esptool-win64\esptool.exe" -Destination "esptool.exe"
+
+      - name: Compile Resource File
+        run: |
+          # Packs firmware.bin and esptool.exe into resources.o
+          windres resources.rc -o resources.o
+
+      - name: Compile Executable
+        run: |
+          # Compiles main.c and links the resources
+          gcc main.c resources.o -o SerialManagerTool.exe -static
+
+      - name: Create Release & Upload
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.version }}
+          name: "Windows Tool ${{ inputs.version }}"
+          files: SerialManagerTool.exe
+          draft: false
+          prerelease: false
