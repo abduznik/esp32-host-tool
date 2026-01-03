@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// Resource IDs
+#define ID_ESPTOOL 101
+#define ID_FIRMWARE 102
+
 HANDLE hSerial;
 
 // Helper to list ports on Windows using the Registry
@@ -134,29 +138,67 @@ void run_monitor(const char* portName)
     CloseHandle(hThread);
 }
 
+// Resource extraction
+int extract_resource(int resource_id, const char* output_filename)
+{
+    HRSRC hRes = FindResource(NULL, MAKEINTRESOURCE(resource_id), RT_RCDATA);
+    if (!hRes) return 0;
+
+    HGLOBAL hMem = LoadResource(NULL, hRes);
+    if (!hMem) return 0;
+
+    DWORD size = SizeofResource(NULL, hRes);
+    void* data = LockResource(hMem);
+
+    FILE* f = fopen (output_filename, "wb");
+    if (!f) return 0;
+
+    fwrite(data, 1, size, f);
+    fclose(f);
+    return 1;
+}
+
+// Flash Logic with extraction
 void flash_firmware(const char* portName)
 {
-    FILE* f = fopen("firmware.bin", "rb");
-    if (f == NULL)
+    char tempPath[MAX_PATH];
+    char esptoolPath[MAX_PATH];
+    char firmwarePath[MAX_PATH];
+    char command[2048];
+
+    printf("\nInfo: Unpacking Internal tools...\n");
+
+    GetTempPath(MAX_PATH, tempPath);
+
+    snprintf(esptoolPath, sizeof(esptoolPath), "%sesptool_internal.exe", tempPath);
+    snprintf(firmwarePath, sizeof(firmwarePath), "%sfirmware_internal.bin", tempPath);
+
+
+    if (!extract_resource(ID_ESPTOOL, esptoolPath))
     {
-        printf("\nError: 'firmware.bin' not found!\n");
-        printf("Please place your combined ESP32 binary in this folder and name it firmware.bin\n");
-        printf("Press Enter to exit...");
+        printf("Error! Failed to unpack internal esptool!\n");
         getchar();
         return;
     }
-    fclose(f);
-
-    char command[512];
+    if (!extract_resource(ID_FIRMWARE, firmwarePath))
+    {
+        printf("Error! Failed to unpack internal firmware!\n");
+        getchar();
+        return;
+    }
 
     // Using python -m esptool for this
     snprintf(command, sizeof(command),
-        "python -m esptool --chip esp32 --port %s --baud 460800 write-flash -z 0x0 firmware.bin",
-        portName);
+        "\"\"%s\" --chip esp32 --port %s --baud 460800 write-flash -z 0x0 \"%s\"\"",
+        esptoolPath, portName, firmwarePath);
     printf("\nInfo: Starting Flash Process on %s...\n", portName);
-    printf("Command: %s\n\n", command);
+    printf("Command: %s\n", command);
+    fflush(stdout);
 
     int result = system(command);
+
+    remove(esptoolPath);
+    remove(firmwarePath);
 
     if (result == 0)
     {
@@ -165,7 +207,6 @@ void flash_firmware(const char* portName)
     else
     {
         printf("Fail! Flashing failed with code %d.\n", result);
-        printf("Ensure you have esptool installed 'pip install esptool'\n");
     }
     
     printf("Press Enter to exit...");
