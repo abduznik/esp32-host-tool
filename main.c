@@ -85,7 +85,8 @@ void configure_port(const char* portName)
     printf("Connected to %s at 115200 baud.\n", portName);
 }   
 
-void read_loop()
+
+DWORD WINAPI SerialReader(LPVOID lpParam)
 {
     char buffer[128];
     DWORD bytesRead;
@@ -104,22 +105,37 @@ void read_loop()
             }
         }
     }
+    return 0;
 }
 
 int main() {
     char portName[16];
+    char inputBuffer[128];
+    DWORD bytesWritten;
 
     list_ports();
 
     printf("\nEnter COM port (e.g, COM3): ");
     scanf("%s", portName);
+    getchar();
 
     configure_port(portName);
 
-    // While Loop until window closed
-    read_loop();
+    HANDLE hThread = CreateThread(NULL, 0, SerialReader, NULL, 0, NULL);
+
+    printf("--- CLI Ready. Type commands (e.g., 'ping', 'led on') and press ENTER ---\n");
+
+    // Main thread handling
+    while (1)
+    {
+        if (fgets(inputBuffer, sizeof(inputBuffer), stdin))
+        {
+            WriteFile(hSerial, inputBuffer, strlen(inputBuffer), &bytesWritten, NULL);
+        }
+    }
 
     CloseHandle(hSerial);
+    CloseHandle(hThread);
 
     return 0;
 }
