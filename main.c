@@ -189,7 +189,7 @@ void flash_firmware(const char* portName)
 
     // Using python -m esptool for this
     snprintf(command, sizeof(command),
-        "\"\"%s\" --chip esp32 --port %s --baud 460800 write-flash -z 0x0 \"%s\"\"",
+        "\"\"%s\" --chip esp32 --port %s --baud 460800 write_flash -z 0x0 \"%s\"\"",
         esptoolPath, portName, firmwarePath);
     printf("\nInfo: Starting Flash Process on %s...\n", portName);
     printf("Command: %s\n", command);
