@@ -39,9 +39,9 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            gcc -Wall -Wextra -O2 main.c -o esp32-tool.exe
+            gcc -Wall -Wextra -O2 main.c common.c setup.c monitor.c flasher.c -o esp32-tool.exe
             gcc -Wall -Wextra -O2 tests/mock_esptool.c -o tests/mock_esptool.exe
-            gcc -Wall -Wextra -O2 tests/test_runner.c -o tests/test_runner.exe
+            gcc -Wall -Wextra -O2 tests/test_runner.c common.c setup.c monitor.c flasher.c -o tests/test_runner.exe
             ./tests/test_runner.exe
             # Clean up test artifacts to keep clean workspace
             rm -f esp32-tool.exe tests/mock_esptool.exe tests/test_runner.exe
@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            gcc -Wall -Wextra -O2 main.c -o esp32-tool.exe
+            gcc -Wall -Wextra -O2 main.c common.c setup.c monitor.c flasher.c -o esp32-tool.exe
           else
             make
           fi

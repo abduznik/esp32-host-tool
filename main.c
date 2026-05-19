@@ -56,10 +56,11 @@ int main(int argc, char* argv[]) {
             printf("1. Select Serial Port [Current: None]\n");
         }
         printf("2. Configure Baud Rate [Current: %d]\n", baudRate);
-        printf("3. Serial Monitor\n"
-               "4. Flash Firmware\n"
-               "5. Setup & Download Tools\n"
-               "6. Quit\n"
+        printf("3. Configure Line Ending [Current: %s]\n", g_line_ending_names[g_line_ending]);
+        printf("4. Serial Monitor\n"
+               "5. Flash Firmware\n"
+               "6. Setup & Download Tools\n"
+               "7. Quit\n"
                "Choice: ");
 
         char choice_str[64];
@@ -72,7 +73,7 @@ int main(int argc, char* argv[]) {
         }
         choice = atoi(choice_str);
 
-        if (choice == 6) {
+        if (choice == 7) {
             printf("Exiting application. Goodbye!\n");
             break;
         }
@@ -157,6 +158,28 @@ int main(int argc, char* argv[]) {
                 break;
             }
             case 3: {
+                printf("\n=== Configure Line Ending ===\n"
+                       "[1] Newline (\\n)\n"
+                       "[2] CRLF (\\r\\n)\n"
+                       "[3] Carriage Return (\\r)\n"
+                       "[4] None / Raw\n"
+                       "Enter choice (1-4): ");
+                char ending_str[64];
+                if (fgets(ending_str, sizeof(ending_str), stdin)) {
+                    ending_str[strcspn(ending_str, "\r\n")] = 0;
+                    if (ending_str[0] != '\0') {
+                        int val = atoi(ending_str);
+                        if (val >= 1 && val <= 4) {
+                            g_line_ending = (line_ending_t)(val - 1);
+                        } else {
+                            printf("Invalid selection. Keeping current.\n");
+                        }
+                    }
+                }
+                printf("Line ending configured to: %s\n", g_line_ending_names[g_line_ending]);
+                break;
+            }
+            case 4: {
                 if (portName[0] == '\0') {
                     printf("Error: No serial port selected! Please select a port first.\n");
                     break;
@@ -164,7 +187,7 @@ int main(int argc, char* argv[]) {
                 run_monitor(portName, baudRate);
                 break;
             }
-            case 4: {
+            case 5: {
                 if (portName[0] == '\0') {
                     printf("Error: No serial port selected! Please select a port first.\n");
                     break;
@@ -249,12 +272,12 @@ int main(int argc, char* argv[]) {
                 }
                 break;
             }
-            case 5: {
+            case 6: {
                 run_setup();
                 break;
             }
             default:
-                printf("Invalid Choice. Please select 1-6.\n");
+                printf("Invalid Choice. Please select 1-7.\n");
                 break;
         }
     }

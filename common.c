@@ -3,6 +3,22 @@
 volatile int monitor_running = 1;
 const char* g_exe_path = NULL;
 
+line_ending_t g_line_ending = LINE_ENDING_LF; // Default: LF (\n)
+
+const char* g_line_ending_names[] = {
+    "Newline (\\n)",
+    "CRLF (\\r\\n)",
+    "Carriage Return (\\r)",
+    "None / Raw"
+};
+
+const char* g_line_ending_strings[] = {
+    "\n",
+    "\r\n",
+    "\r",
+    ""
+};
+
 int file_exists(const char* filename) {
     FILE* f = fopen(filename, "r");
     if (f) {

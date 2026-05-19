@@ -63,8 +63,8 @@ void run_monitor(const char* portName, int baudRate) {
                 monitor_running = 0;
                 break;
             }
-            // Restore newline
-            strcat(inputBuffer, "\n");
+            // Append configured line ending
+            strcat(inputBuffer, g_line_ending_strings[g_line_ending]);
             serial_write(port, inputBuffer, strlen(inputBuffer));
         } else {
             usleep(10000); // Sleep briefly on stdin EOF or error
