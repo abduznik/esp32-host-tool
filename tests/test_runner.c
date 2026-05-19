@@ -69,19 +69,19 @@ void test_flash_pipeline() {
 
     // Scenario A: Valid firmware, valid port (Should succeed)
     printf("  Subtest A: Good flash\n");
-    flash_firmware("COM3", "tests/dummy_good.bin");
+    flash_firmware("COM3", 460800, "tests/dummy_good.bin");
 
     // Scenario B: Port connection failure (Should fail)
     printf("  Subtest B: Port failure\n");
-    flash_firmware("FAIL_PORT", "tests/dummy_good.bin");
+    flash_firmware("FAIL_PORT", 460800, "tests/dummy_good.bin");
 
     // Scenario C: Corrupted firmware image (Should fail)
     printf("  Subtest C: Corrupt firmware\n");
-    flash_firmware("COM3", "tests/dummy_corrupt.bin");
+    flash_firmware("COM3", 460800, "tests/dummy_corrupt.bin");
 
     // Scenario D: Missing firmware image (Should fail)
     printf("  Subtest D: Missing firmware\n");
-    flash_firmware("COM3", "tests/dummy_missing.bin");
+    flash_firmware("COM3", 460800, "tests/dummy_missing.bin");
 
     // Clean up files
     remove("tests/dummy_good.bin");

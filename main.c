@@ -211,7 +211,7 @@ void run_monitor(const char* portName, int baudRate) {
     printf("Disconnected from monitor. Returning to main menu.\n");
 }
 
-void flash_firmware(const char* portName, const char* binPath) {
+void flash_firmware(const char* portName, int baudRate, const char* binPath) {
     char command[2048];
     const char* esptool_cmd = getenv("ESPTOOL");
     
@@ -246,11 +246,11 @@ void flash_firmware(const char* portName, const char* binPath) {
 
     printf("\nInfo: Starting Flash Process on %s...\n", portName);
 #ifdef _WIN32
-    snprintf(command, sizeof(command), "\"\"%s\" --chip esp32 --port %s --baud 460800 write_flash -z 0x0 \"%s\"\"",
-             esptool_cmd, portName, binPath);
+    snprintf(command, sizeof(command), "\"\"%s\" --chip esp32 --port %s --baud %d write_flash -z -fm dio 0x0 \"%s\"\"",
+             esptool_cmd, portName, baudRate, binPath);
 #else
-    snprintf(command, sizeof(command), "\"%s\" --chip esp32 --port \"%s\" --baud 460800 write_flash -z 0x0 \"%s\"",
-             esptool_cmd, portName, binPath);
+    snprintf(command, sizeof(command), "\"%s\" --chip esp32 --port \"%s\" --baud %d write_flash -z -fm dio 0x0 \"%s\"",
+             esptool_cmd, portName, baudRate, binPath);
 #endif
     printf("Command: %s\n", command);
     fflush(stdout);
@@ -290,7 +290,7 @@ int main(int argc, char* argv[]) {
             }
             const char* port = argv[2];
             const char* bin = argv[3];
-            flash_firmware(port, bin);
+            flash_firmware(port, 460800, bin);
             return 0;
         } else {
             printf("Unknown command: %s\n", argv[1]);
@@ -305,6 +305,7 @@ int main(int argc, char* argv[]) {
 
     // Interactive menu fallback
     char portName[256] = {0};
+    int baudRate = 115200;
     int choice;
 
     while (1) {
@@ -314,23 +315,24 @@ int main(int argc, char* argv[]) {
         } else {
             printf("1. Select Serial Port [Current: None]\n");
         }
-        printf("2. Serial Monitor\n"
-               "3. Flash Firmware\n"
-               "4. Setup & Download Tools\n"
-               "5. Quit\n"
+        printf("2. Configure Baud Rate [Current: %d]\n", baudRate);
+        printf("3. Serial Monitor\n"
+               "4. Flash Firmware\n"
+               "5. Setup & Download Tools\n"
+               "6. Quit\n"
                "Choice: ");
 
         if (scanf("%d", &choice) != 1) {
             int c;
             while ((c = getchar()) != '\n' && c != EOF);
-            printf("Invalid Choice. Please select 1-5.\n");
+            printf("Invalid Choice. Please select 1-6.\n");
             continue;
         }
         
         int c;
         while ((c = getchar()) != '\n' && c != EOF); // Consume newline
 
-        if (choice == 5) {
+        if (choice == 6) {
             printf("Exiting application. Goodbye!\n");
             break;
         }
@@ -385,14 +387,45 @@ int main(int argc, char* argv[]) {
                 break;
             }
             case 2: {
+                printf("\n=== Configure Baud Rate ===\n"
+                       "[1] 9600\n"
+                       "[2] 19200\n"
+                       "[3] 38400\n"
+                       "[4] 57600\n"
+                       "[5] 74880\n"
+                       "[6] 115200 (Default)\n"
+                       "[7] 230400\n"
+                       "[8] 460800\n"
+                       "[9] 921600\n"
+                       "Enter choice (1-9) or type a custom baud rate: ");
+                
+                char baud_str[64];
+                if (fgets(baud_str, sizeof(baud_str), stdin)) {
+                    baud_str[strcspn(baud_str, "\r\n")] = 0;
+                    if (baud_str[0] != '\0') {
+                        int val = atoi(baud_str);
+                        if (val >= 1 && val <= 9) {
+                            int rates[] = {9600, 19200, 38400, 57600, 74880, 115200, 230400, 460800, 921600};
+                            baudRate = rates[val - 1];
+                        } else if (val > 0) {
+                            baudRate = val;
+                        } else {
+                            printf("Invalid selection. Keeping %d baud.\n", baudRate);
+                        }
+                    }
+                }
+                printf("Baud rate configured to: %d\n", baudRate);
+                break;
+            }
+            case 3: {
                 if (portName[0] == '\0') {
                     printf("Error: No serial port selected! Please select a port first.\n");
                     break;
                 }
-                run_monitor(portName, 115200);
+                run_monitor(portName, baudRate);
                 break;
             }
-            case 3: {
+            case 4: {
                 if (portName[0] == '\0') {
                     printf("Error: No serial port selected! Please select a port first.\n");
                     break;
@@ -472,18 +505,18 @@ int main(int argc, char* argv[]) {
                                    "  IDF Version:  %s\n",
                                    info.project_name, info.version, info.date, info.time, info.idf_ver);
                         }
-                        flash_firmware(portName, chosen_bin);
+                        flash_firmware(portName, baudRate, chosen_bin);
                         break;
                     }
                 }
                 break;
             }
-            case 4: {
+            case 5: {
                 run_setup();
                 break;
             }
             default:
-                printf("Invalid Choice. Please select 1-5.\n");
+                printf("Invalid Choice. Please select 1-6.\n");
                 break;
         }
     }
