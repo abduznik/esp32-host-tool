@@ -1,0 +1,33 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Test Suite
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            gcc -Wall -Wextra -O2 main.c -o esp32-tool.exe
+            gcc -Wall -Wextra -O2 tests/mock_esptool.c -o tests/mock_esptool.exe
+            gcc -Wall -Wextra -O2 tests/test_runner.c -o tests/test_runner.exe
+            ./tests/test_runner.exe
+          else
+            make test
+          fi

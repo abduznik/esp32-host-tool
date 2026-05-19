@@ -1,0 +1,145 @@
+name: Build Cross-Platform Tool
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: esp32-tool-linux
+            binary_name: esp32-tool
+          - os: macos-latest
+            artifact_name: esp32-tool-macos
+            binary_name: esp32-tool
+          - os: windows-latest
+            artifact_name: esp32-tool-windows
+            binary_name: esp32-tool.exe
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Test Suite
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            gcc -Wall -Wextra -O2 main.c -o esp32-tool.exe
+            gcc -Wall -Wextra -O2 tests/mock_esptool.c -o tests/mock_esptool.exe
+            gcc -Wall -Wextra -O2 tests/test_runner.c -o tests/test_runner.exe
+            ./tests/test_runner.exe
+            # Clean up test artifacts to keep clean workspace
+            rm -f esp32-tool.exe tests/mock_esptool.exe tests/test_runner.exe
+          else
+            make test
+            make clean
+          fi
+
+      - name: Build Production Binary
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            gcc -Wall -Wextra -O2 main.c -o esp32-tool.exe
+          else
+            make
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.binary_name }}
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    # Only run release if it is a tag push or manual workflow dispatch
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Determine Version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "BUILD_VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+          else
+            echo "BUILD_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+          fi
+
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: esp32-tool-linux
+          path: linux-bin
+
+      - name: Download macOS Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: esp32-tool-macos
+          path: macos-bin
+
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: esp32-tool-windows
+          path: windows-bin
+
+      - name: Package Binaries
+        shell: bash
+        run: |
+          mkdir dist
+          
+          # Linux packaging
+          chmod +x linux-bin/esp32-tool
+          tar -czf dist/esp32-tool-linux-amd64.tar.gz -C linux-bin esp32-tool
+          
+          # macOS packaging (Universal Binary)
+          chmod +x macos-bin/esp32-tool
+          tar -czf dist/esp32-tool-macos-universal.tar.gz -C macos-bin esp32-tool
+          
+          # Windows packaging
+          zip -j dist/esp32-tool-windows-amd64.zip windows-bin/esp32-tool.exe
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.BUILD_VERSION }}
+          name: "ESP32 Host Tool ${{ env.BUILD_VERSION }}"
+          body: |
+            ## Cross-Platform Release `${{ env.BUILD_VERSION }}`
+            
+            This is a generic, platform-agnostic release of the `esp32-tool` CLI companion for Windows, Linux, and macOS.
+            
+            ### Packages
+            - **Linux (amd64):** `esp32-tool-linux-amd64.tar.gz`
+            - **macOS (Universal - Intel + Apple Silicon):** `esp32-tool-macos-universal.tar.gz`
+            - **Windows (amd64):** `esp32-tool-windows-amd64.zip`
+            
+            *No external dependencies or runtime environments are required beyond `esptool` configured on your system PATH.*
+          files: |
+            dist/esp32-tool-linux-amd64.tar.gz
+            dist/esp32-tool-macos-universal.tar.gz
+            dist/esp32-tool-windows-amd64.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
