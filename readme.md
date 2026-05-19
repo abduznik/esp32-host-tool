@@ -1,11 +1,10 @@
 # ESP32 Host Tool
 
-![Flash Example](assets/example_flash.gif)
-![Monitor Example](assets/example_monitor.gif)
+A lightweight, zero-dependency, cross-platform CLI companion tool for ESP32 devices, written in Pure C. 
 
-A lightweight, cross-platform CLI companion tool for ESP32 devices, written in **Pure C**. 
+The application serves as a generic diagnostic and deployment utility for flashing any `.bin` firmware and interacting with ESP32 serial interfaces.
 
-Decoupled from hardcoded firmware and esptool binaries, it is a generic utility for flashing any `.bin` firmware and interacting with the ESP32 serial interface.
+---
 
 ## Supported Platforms
 - **Windows** (using Win32 API and Registry scanning)
@@ -14,48 +13,57 @@ Decoupled from hardcoded firmware and esptool binaries, it is a generic utility 
 
 ---
 
-## Tech Stack
-* **Language:** Pure C (no C++)
-* **Dependencies:** None (zero external libraries; uses native OS primitives: Win32 API on Windows, POSIX `pthread`/`termios`/`glob` on Linux/macOS)
-* **Build System:** Makefile with automatic platform detection (works with GCC/Clang on Unix, and MinGW on Windows)
+## Technical Architecture
+* **Language:** Pure C (no C++ standard library dependencies).
+* **Dependencies:** Zero external libraries. Uses native OS primitives: Win32 API on Windows, and POSIX `pthread`/`termios`/`glob` on Linux/macOS.
+* **Modular Structure:** The codebase is fully modularized into isolated functional domains:
+  - `main.c`: CLI router and main menu controller.
+  - `common.c` / `common.h`: Shared resources, platform helpers, and path resolvers.
+  - `monitor.c` / `monitor.h`: Dual-thread non-blocking serial communication driver.
+  - `flasher.c` / `flasher.h`: Firmware signature verification and flashing pipeline wrapper.
+  - `setup.c` / `setup.h`: Automated installation and setup script.
+  - `platform.h`: Unified cross-platform serial and threading abstraction layer.
+* **Build System:** Makefile with automatic platform detection (works with GCC/Clang on Unix, and MinGW on Windows).
 
 ---
 
-## Features
+## Core Features
 * **Cross-Platform Port Detection:** 
   - **Windows:** Scans the Registry (`HARDWARE\DEVICEMAP\SERIALCOMM`)
   - **Linux:** Scans `/dev/ttyUSB*` and `/dev/ttyACM*`
   - **macOS:** Scans `/dev/cu.usbserial*` and `/dev/cu.SLAB*`
-* **Multithreaded Monitor:** Handles asynchronous serial reading in a dedicated background thread while keeping CLI inputs active and responsive.
-* **Generalized Flashing:** Invokes system `esptool` automatically with custom `.bin` paths, wrapping arguments behind the scenes. Works with any firmware!
-* **Dual Interface Mode:** Full CLI-argument driven interface with automatic fallback to the classic interactive selection menu.
+* **Stabilized Bidirectional Monitor:** Utilizes high-precision hardware serial buffer purging (`tcflush` / `PurgeComm`) and startup newline handshaking to eliminate flashing residuals and synchronize the console instantly.
+* **Custom Line Endings:** Built-in configurator to dynamically toggle outgoing line endings on the fly:
+  - Newline (`\n`)
+  - CRLF (`\r\n`)
+  - Carriage Return (`\r`)
+  - None / Raw (Direct byte-stream transmission)
+* **ESP32 Binary Descriptor Parsing:** Reads and extracts signature metadata directly from compiled firmware `.bin` files (Project name, App version, Compile date/time, and IDF version) prior to flashing.
+* **Automated Tooling Setup:** Interactive downloader to retrieve and unpack platform-matched `esptool` executable wrappers and official companion firmware releases using standard system curl.
+* **Dual Interface Mode:** Full command-line argument interface with automatic fallback to the interactive menu when executed without parameters.
 
 ---
 
 ## CLI Interface & Usage
 
-### 1. List Available Serial Ports
-Lists all detected serial devices on the system.
+### 1. List Detected Serial Ports
 ```bash
 ./esp32-tool ports
 ```
 
-### 2. Serial Monitor
-Opens a real-time monitor on the specified port. Optionally set the baud rate (defaults to 115200).
+### 2. Launch Serial Monitor
 ```bash
 ./esp32-tool monitor <port> [--baud 115200]
 ```
 
-### 3. Flash Arbitrary Firmware
-Flashes the specified `.bin` file to the destination port using `esptool`.
+### 3. Flash Firmware Directly
 ```bash
 ./esp32-tool flash <port> <path/to/firmware.bin>
 ```
 > [!NOTE]
-> You must have `esptool` installed and available on your system `PATH`. Alternatively, pass its path explicitly by setting the `ESPTOOL` environment variable, e.g., `export ESPTOOL=/path/to/esptool`.
+> You must have `esptool` installed and available on your system `PATH`. Alternatively, configure its location explicitly by setting the `ESPTOOL` environment variable, e.g., `export ESPTOOL=/path/to/esptool`.
 
-### 4. Interactive Menu (Fallback)
-Running the tool without arguments drops into the classic interactive selection menu.
+### 4. Interactive Configuration Menu
 ```bash
 ./esp32-tool
 ```
@@ -67,21 +75,25 @@ Running the tool without arguments drops into the classic interactive selection 
 ### Prerequisites
 - **GCC / Clang** (for Linux/macOS)
 - **MinGW-w64** (for Windows)
-- **esptool** (on system `PATH` or configured via `ESPTOOL` env var)
 
-### Building
-The included `Makefile` automatically detects your operating system and sets up the correct build flags and link dependencies:
+### Compilation
+The included `Makefile` automatically detects the host operating system, configures standard optimization flags, and links relevant platform dependencies:
 
 ```bash
 # Clone the repository
 git clone https://github.com/abduznik/esp32-host-tool.git
 cd esp32-host-tool
 
-# Build the executable
+# Compile the production binary
 make
 ```
 
-To clean up build outputs:
+To run unit tests:
+```bash
+make test
+```
+
+To clean build output:
 ```bash
 make clean
 ```
