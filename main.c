@@ -27,7 +27,11 @@ void run_monitor(const char* portName, int baudRate) {
     serial_t port = serial_open(portName, baudRate);
 
     if (port == INVALID_SERIAL) {
+#ifdef _WIN32
+        printf("Error: Could not open %s (Code: %lu)\n", portName, GetLastError());
+#else
         printf("Error: Could not open %s\n", portName);
+#endif
         exit(1);
     }
 
@@ -124,11 +128,19 @@ int main(int argc, char* argv[]) {
     char binPath[512];
     int choice;
 
-    list_ports();
+    while (1) {
+        list_ports();
+        printf("\nEnter port (e.g., COM3 or /dev/ttyUSB0) or 'r' to refresh: ");
+        if (!fgets(portName, sizeof(portName), stdin)) {
+            return 1;
+        }
+        portName[strcspn(portName, "\r\n")] = 0;
 
-    printf("\nEnter port (e.g., COM3 or /dev/ttyUSB0): ");
-    if (scanf("%255s", portName) != 1) {
-        return 1;
+        if (strcmp(portName, "r") == 0 || strcmp(portName, "R") == 0 || strcmp(portName, "0") == 0) {
+            printf("\nRefreshing port list...\n\n");
+            continue;
+        }
+        break;
     }
 
     printf("\n--- Select Action ---\n"
