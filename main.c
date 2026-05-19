@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Global control to run the serial monitor read loop
+volatile int monitor_running = 1;
+
 // Helper to check if a file exists
 int file_exists(const char* filename) {
     FILE* f = fopen(filename, "r");
@@ -149,9 +152,9 @@ THREAD_FUNC SerialReader(thread_arg_t lpParam) {
     char buffer[128];
     serial_t port = *(serial_t*)lpParam;
 
-    printf("--- Monitor (Press CTRL+C to Exit) ---\n");
+    printf("--- Monitor (Type 'exit' and press ENTER to go back to menu) ---\n");
 
-    while (1) {
+    while (monitor_running) {
         int bytesRead = serial_read(port, buffer, sizeof(buffer) - 1);
         if (bytesRead > 0) {
             buffer[bytesRead] = '\0';
@@ -174,29 +177,38 @@ void run_monitor(const char* portName, int baudRate) {
 #else
         printf("Error: Could not open %s\n", portName);
 #endif
-        exit(1);
+        return;
     }
 
     printf("Connected to %s at %d baud.\n", portName, baudRate);
 
+    monitor_running = 1;
     thread_t thread;
     if (thread_create(&thread, SerialReader, &port) != 0) {
         printf("Error: Could not create thread.\n");
         serial_close(port);
-        exit(1);
+        return;
     }
 
-    printf("--- CLI Ready. Type commands (e.g., 'ping', 'led on') and press ENTER ---\n");
+    printf("--- CLI Ready. Type commands (e.g., 'ping', 'led on') and press ENTER. Type 'exit' to go back ---\n");
 
     // Main thread handling
-    while (1) {
+    while (monitor_running) {
         if (fgets(inputBuffer, sizeof(inputBuffer), stdin)) {
+            inputBuffer[strcspn(inputBuffer, "\r\n")] = 0;
+            if (strcmp(inputBuffer, "exit") == 0) {
+                monitor_running = 0;
+                break;
+            }
+            // Restore newline
+            strcat(inputBuffer, "\n");
             serial_write(port, inputBuffer, strlen(inputBuffer));
         }
     }
 
     serial_close(port);
     thread_close(thread);
+    printf("Disconnected from monitor. Returning to main menu.\n");
 }
 
 void flash_firmware(const char* portName, const char* binPath) {
@@ -292,153 +304,188 @@ int main(int argc, char* argv[]) {
     }
 
     // Interactive menu fallback
-    char portName[256];
+    char portName[256] = {0};
     int choice;
 
     while (1) {
-        while (1) {
-            list_ports();
-            printf("\nEnter port (e.g., COM3 or /dev/ttyUSB0, or select index e.g., 0) or 'r' to refresh: ");
-            if (!fgets(portName, sizeof(portName), stdin)) {
-                return 1;
-            }
-            portName[strcspn(portName, "\r\n")] = 0;
-
-            if (strcmp(portName, "r") == 0 || strcmp(portName, "R") == 0) {
-                printf("\nRefreshing port list...\n\n");
-                continue;
-            }
-
-            // Check if input is a numeric index
-            int is_numeric = 1;
-            if (portName[0] == '\0') {
-                is_numeric = 0;
-            } else {
-                for (int i = 0; portName[i] != '\0'; ++i) {
-                    if (portName[i] < '0' || portName[i] > '9') {
-                        is_numeric = 0;
-                        break;
-                    }
-                }
-            }
-
-            if (is_numeric) {
-                int idx = atoi(portName);
-                char ports[32][256];
-                int count = get_ports_list(ports, 32);
-                if (idx >= 0 && idx < count) {
-                    strncpy(portName, ports[idx], sizeof(portName) - 1);
-                    portName[sizeof(portName) - 1] = '\0';
-                    printf("Resolved index %d to: %s\n", idx, portName);
-                } else {
-                    printf("Error: Invalid port index %d. Try again.\n\n", idx);
-                    continue;
-                }
-            }
-            break;
+        printf("\n=== ESP32 Host Tool Main Menu ===\n");
+        if (portName[0] != '\0') {
+            printf("1. Select Serial Port [Current: %s]\n", portName);
+        } else {
+            printf("1. Select Serial Port [Current: None]\n");
         }
-
-        printf("\n--- Select Action ---\n"
-               "1. Serial Monitor\n"
-               "2. Flash Firmware\n"
-               "3. Setup & Download Tools\n"
+        printf("2. Serial Monitor\n"
+               "3. Flash Firmware\n"
+               "4. Setup & Download Tools\n"
+               "5. Quit\n"
                "Choice: ");
 
         if (scanf("%d", &choice) != 1) {
-            return 1;
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF);
+            printf("Invalid Choice. Please select 1-5.\n");
+            continue;
         }
         
-        // Consume leftover characters in input buffer including newline
         int c;
-        while ((c = getchar()) != '\n' && c != EOF);
+        while ((c = getchar()) != '\n' && c != EOF); // Consume newline
 
-        if (choice == 3) {
-            run_setup();
-            continue; // Re-run main selection/port list loop
+        if (choice == 5) {
+            printf("Exiting application. Goodbye!\n");
+            break;
         }
 
         switch (choice) {
-            case 1:
+            case 1: {
+                while (1) {
+                    list_ports();
+                    printf("\nEnter port index, port name (e.g., COM3 or /dev/ttyUSB0), or 'b' to go back: ");
+                    char input[256];
+                    if (!fgets(input, sizeof(input), stdin)) {
+                        break;
+                    }
+                    input[strcspn(input, "\r\n")] = 0;
+
+                    if (strcmp(input, "b") == 0 || strcmp(input, "B") == 0) {
+                        break;
+                    }
+
+                    // Check if numeric index
+                    int is_numeric = 1;
+                    if (input[0] == '\0') {
+                        is_numeric = 0;
+                    } else {
+                        for (int i = 0; input[i] != '\0'; ++i) {
+                            if (input[i] < '0' || input[i] > '9') {
+                                is_numeric = 0;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (is_numeric) {
+                        int idx = atoi(input);
+                        char ports[32][256];
+                        int count = get_ports_list(ports, 32);
+                        if (idx >= 0 && idx < count) {
+                            strncpy(portName, ports[idx], sizeof(portName) - 1);
+                            portName[sizeof(portName) - 1] = '\0';
+                            printf("Resolved index %d to: %s\n", idx, portName);
+                            break;
+                        } else {
+                            printf("Error: Invalid port index %d. Try again.\n\n", idx);
+                            continue;
+                        }
+                    } else {
+                        strncpy(portName, input, sizeof(portName) - 1);
+                        portName[sizeof(portName) - 1] = '\0';
+                        break;
+                    }
+                }
+                break;
+            }
+            case 2: {
+                if (portName[0] == '\0') {
+                    printf("Error: No serial port selected! Please select a port first.\n");
+                    break;
+                }
                 run_monitor(portName, 115200);
                 break;
-            case 2: {
+            }
+            case 3: {
+                if (portName[0] == '\0') {
+                    printf("Error: No serial port selected! Please select a port first.\n");
+                    break;
+                }
+                
                 char bin_files[16][256];
                 int bin_count = get_bin_files(bin_files, 16);
                 char chosen_bin[512] = {0};
 
-                if (bin_count > 0) {
-                    printf("\n--- Found firmware .bin files in current directory ---\n");
-                    for (int i = 0; i < bin_count; ++i) {
-                        esp_info_t info;
-                        if (detect_esp_bin_info(bin_files[i], &info)) {
-                            printf("[%d] %s (App: %s, Ver: %s, Built: %s %s, IDF: %s)\n",
-                                   i, bin_files[i], info.project_name, info.version, info.date, info.time, info.idf_ver);
-                        } else {
-                            printf("[%d] %s (Generic ESP32 Bin)\n", i, bin_files[i]);
+                while (1) {
+                    if (bin_count > 0) {
+                        printf("\n--- Found firmware .bin files in current directory ---\n");
+                        for (int i = 0; i < bin_count; ++i) {
+                            esp_info_t info;
+                            if (detect_esp_bin_info(bin_files[i], &info)) {
+                                printf("[%d] %s (App: %s, Ver: %s, Built: %s %s, IDF: %s)\n",
+                                       i, bin_files[i], info.project_name, info.version, info.date, info.time, info.idf_ver);
+                            } else {
+                                printf("[%d] %s (Generic ESP32 Bin)\n", i, bin_files[i]);
+                            }
                         }
-                    }
-                    printf("\nEnter index of .bin to flash, or type a custom file path: ");
-                    
-                    char choice_str[256];
-                    if (fgets(choice_str, sizeof(choice_str), stdin)) {
-                        choice_str[strcspn(choice_str, "\r\n")] = 0;
+                        printf("\nEnter index of .bin to flash, type a custom file path, or 'b' to go back: ");
                         
-                        // Check if numeric index
-                        int is_num = 1;
-                        if (choice_str[0] == '\0') {
-                            is_num = 0;
-                        } else {
-                            for (int i = 0; choice_str[i] != '\0'; ++i) {
-                                if (choice_str[i] < '0' || choice_str[i] > '9') {
-                                    is_num = 0;
-                                    break;
+                        char choice_str[256];
+                        if (fgets(choice_str, sizeof(choice_str), stdin)) {
+                            choice_str[strcspn(choice_str, "\r\n")] = 0;
+                            
+                            if (strcmp(choice_str, "b") == 0 || strcmp(choice_str, "B") == 0) {
+                                break;
+                            }
+                            
+                            // Check if numeric index
+                            int is_num = 1;
+                            if (choice_str[0] == '\0') {
+                                is_num = 0;
+                            } else {
+                                for (int i = 0; choice_str[i] != '\0'; ++i) {
+                                    if (choice_str[i] < '0' || choice_str[i] > '9') {
+                                        is_num = 0;
+                                        break;
+                                    }
                                 }
                             }
-                        }
-                        
-                        if (is_num) {
-                            int b_idx = atoi(choice_str);
-                            if (b_idx >= 0 && b_idx < bin_count) {
-                                strncpy(chosen_bin, bin_files[b_idx], sizeof(chosen_bin) - 1);
-                                chosen_bin[sizeof(chosen_bin) - 1] = '\0';
-                                printf("Selected binary: %s\n", chosen_bin);
+                            
+                            if (is_num) {
+                                int b_idx = atoi(choice_str);
+                                if (b_idx >= 0 && b_idx < bin_count) {
+                                    strncpy(chosen_bin, bin_files[b_idx], sizeof(chosen_bin) - 1);
+                                    chosen_bin[sizeof(chosen_bin) - 1] = '\0';
+                                    printf("Selected binary: %s\n", chosen_bin);
+                                } else {
+                                    printf("Invalid index. Try again.\n");
+                                    continue;
+                                }
                             } else {
-                                printf("Invalid index. Falling back to typing custom path.\n");
+                                strncpy(chosen_bin, choice_str, sizeof(chosen_bin) - 1);
+                                chosen_bin[sizeof(chosen_bin) - 1] = '\0';
                             }
-                        } else {
-                            strncpy(chosen_bin, choice_str, sizeof(chosen_bin) - 1);
-                            chosen_bin[sizeof(chosen_bin) - 1] = '\0';
+                        }
+                    } else {
+                        printf("Enter firmware .bin path or 'b' to go back: ");
+                        if (fgets(chosen_bin, sizeof(chosen_bin), stdin)) {
+                            chosen_bin[strcspn(chosen_bin, "\r\n")] = 0;
+                            if (strcmp(chosen_bin, "b") == 0 || strcmp(chosen_bin, "B") == 0) {
+                                break;
+                            }
                         }
                     }
-                }
-                
-                // If no binary files found, or custom path selected
-                if (chosen_bin[0] == '\0') {
-                    printf("Enter firmware .bin path: ");
-                    if (fgets(chosen_bin, sizeof(chosen_bin), stdin)) {
-                        chosen_bin[strcspn(chosen_bin, "\r\n")] = 0;
-                    }
-                }
 
-                if (chosen_bin[0] != '\0') {
-                    esp_info_t info;
-                    if (detect_esp_bin_info(chosen_bin, &info)) {
-                        printf("\nDetected ESP32 Firmware Signature:\n"
-                               "  Project Name: %s\n"
-                               "  App Version:  %s\n"
-                               "  Compile Date: %s %s\n"
-                               "  IDF Version:  %s\n",
-                               info.project_name, info.version, info.date, info.time, info.idf_ver);
+                    if (chosen_bin[0] != '\0') {
+                        esp_info_t info;
+                        if (detect_esp_bin_info(chosen_bin, &info)) {
+                            printf("\nDetected ESP32 Firmware Signature:\n"
+                                   "  Project Name: %s\n"
+                                   "  App Version:  %s\n"
+                                   "  Compile Date: %s %s\n"
+                                   "  IDF Version:  %s\n",
+                                   info.project_name, info.version, info.date, info.time, info.idf_ver);
+                        }
+                        flash_firmware(portName, chosen_bin);
+                        break;
                     }
-                    flash_firmware(portName, chosen_bin);
                 }
                 break;
             }
+            case 4: {
+                run_setup();
+                break;
+            }
             default:
-                printf("Invalid Choice. Exiting.\n");
+                printf("Invalid Choice. Please select 1-5.\n");
                 break;
         }
-        break;
     }
 
     return 0;
