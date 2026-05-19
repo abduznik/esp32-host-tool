@@ -231,6 +231,10 @@ void run_monitor(const char* portName, int baudRate) {
         return;
     }
 
+    // Send a "fake enter" (handshake newline) to synchronize and request prompt immediately
+    usleep(50000); 
+    serial_write(port, "\n", 1);
+
     printf("--- CLI Ready. Type commands (e.g., 'ping', 'led on') and press ENTER. Type 'exit' to go back ---\n");
 
     // Main thread handling

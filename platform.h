@@ -97,6 +97,7 @@ static inline serial_t serial_open(const char* port_name, int baud_rate) {
     timeouts.ReadTotalTimeoutMultiplier = 10;
     SetCommTimeouts(hSerial, &timeouts);
     
+    PurgeComm(hSerial, PURGE_RXCLEAR | PURGE_TXCLEAR | PURGE_RXABORT | PURGE_TXABORT);
     return hSerial;
 #else
     serial_t fd = open(port_name, O_RDWR | O_NOCTTY | O_NDELAY);
@@ -160,6 +161,7 @@ static inline serial_t serial_open(const char* port_name, int baud_rate) {
     }
 #endif
     
+    tcflush(fd, TCIOFLUSH);
     return fd;
 #endif
 }
