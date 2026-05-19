@@ -186,16 +186,15 @@ static inline void serial_close(serial_t fd) {
 #endif
 }
 
-// Port scanner
-static inline void list_ports() {
-    printf("--- Available Serial Ports ---\n");
+// Get list of ports
+static inline int get_ports_list(char ports[][256], int max_ports) {
+    int count = 0;
 #ifdef _WIN32
     HKEY hKey;
     char path[256];
     char port_name[256];
     if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, "HARDWARE\\DEVICEMAP\\SERIALCOMM", 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
-        printf("Error: Could not access registry to list ports.\n");
-        return;
+        return 0;
     }
 
     DWORD index = 0;
@@ -204,15 +203,16 @@ static inline void list_ports() {
     DWORD type;
 
     while (RegEnumValue(hKey, index, port_name, &name_len, NULL, &type, (LPBYTE)path, &data_len) == ERROR_SUCCESS) {
-        printf("[%d] %s (Internal: %s)\n", (int)index, path, port_name);
+        if (count < max_ports) {
+            strncpy(ports[count], path, 255);
+            ports[count][255] = '\0';
+            count++;
+        }
         index++;
         name_len = sizeof(port_name);
         data_len = sizeof(path);
     }
     RegCloseKey(hKey);
-    if (index == 0) {
-        printf("No serial ports found.\n");
-    }
 #else
     glob_t glob_result;
     memset(&glob_result, 0, sizeof(glob_result));
@@ -227,15 +227,29 @@ static inline void list_ports() {
     glob("/dev/ttyACM*", glob_flags | GLOB_APPEND, NULL, &glob_result);
 #endif
 
-    if (glob_result.gl_pathc == 0) {
-        printf("No serial ports found.\n");
-    } else {
-        for (size_t i = 0; i < glob_result.gl_pathc; ++i) {
-            printf("[%d] %s\n", (int)i, glob_result.gl_pathv[i]);
+    for (size_t i = 0; i < glob_result.gl_pathc; ++i) {
+        if (count < max_ports) {
+            strncpy(ports[count], glob_result.gl_pathv[i], 255);
+            ports[count][255] = '\0';
+            count++;
         }
     }
     globfree(&glob_result);
 #endif
+    return count;
+}
+
+// Port scanner
+static inline void list_ports() {
+    printf("--- Available Serial Ports ---\n");
+    char ports[32][256];
+    int count = get_ports_list(ports, 32);
+    for (int i = 0; i < count; ++i) {
+        printf("[%d] %s\n", i, ports[i]);
+    }
+    if (count == 0) {
+        printf("No serial ports found.\n");
+    }
 }
 
 #endif // PLATFORM_H
