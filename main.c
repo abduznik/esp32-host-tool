@@ -113,12 +113,11 @@ void run_setup() {
            "5. Back to Main Menu\n"
            "Choice: ", esptool_ver, firmware_ver);
 
-    if (scanf("%d", &choice) != 1) {
+    char choice_str[64];
+    if (!fgets(choice_str, sizeof(choice_str), stdin)) {
         return;
     }
-    // Consume leftover newline
-    int c;
-    while ((c = getchar()) != '\n' && c != EOF);
+    choice = atoi(choice_str);
 
     char url[512];
     char cmd[1024];
@@ -200,6 +199,8 @@ THREAD_FUNC SerialReader(thread_arg_t lpParam) {
             buffer[bytesRead] = '\0';
             printf("%s", buffer);
             fflush(stdout);
+        } else {
+            usleep(10000); // 10ms sleep to prevent spinning on non-blocking reads/errors
         }
     }
     return 0;
@@ -243,6 +244,8 @@ void run_monitor(const char* portName, int baudRate) {
             // Restore newline
             strcat(inputBuffer, "\n");
             serial_write(port, inputBuffer, strlen(inputBuffer));
+        } else {
+            usleep(10000); // Sleep briefly on stdin EOF or error
         }
     }
 
@@ -367,15 +370,15 @@ int main(int argc, char* argv[]) {
                "6. Quit\n"
                "Choice: ");
 
-        if (scanf("%d", &choice) != 1) {
-            int c;
-            while ((c = getchar()) != '\n' && c != EOF);
-            printf("Invalid Choice. Please select 1-6.\n");
+        char choice_str[64];
+        if (!fgets(choice_str, sizeof(choice_str), stdin)) {
             continue;
         }
-        
-        int c;
-        while ((c = getchar()) != '\n' && c != EOF); // Consume newline
+        choice_str[strcspn(choice_str, "\r\n")] = 0;
+        if (choice_str[0] == '\0') {
+            continue;
+        }
+        choice = atoi(choice_str);
 
         if (choice == 6) {
             printf("Exiting application. Goodbye!\n");
