@@ -236,6 +236,11 @@ void run_monitor(const char* portName, int baudRate) {
     // Main thread handling
     while (monitor_running) {
         if (fgets(inputBuffer, sizeof(inputBuffer), stdin)) {
+            // Check if this is a real user entry (must contain a newline/carriage return)
+            if (strchr(inputBuffer, '\n') == NULL && strchr(inputBuffer, '\r') == NULL) {
+                usleep(10000); // Sleep and skip spurious empty/non-blocking reads
+                continue;
+            }
             inputBuffer[strcspn(inputBuffer, "\r\n")] = 0;
             if (strcmp(inputBuffer, "exit") == 0) {
                 monitor_running = 0;
