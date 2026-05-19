@@ -482,7 +482,7 @@ int main(int argc, char* argv[]) {
 
                 while (1) {
                     if (bin_count > 0) {
-                        printf("\n--- Found firmware .bin files in current directory ---\n");
+                        printf("\n--- Discovered firmware .bin files (local or near tool) ---\n");
                         for (int i = 0; i < bin_count; ++i) {
                             esp_info_t info;
                             if (detect_esp_bin_info(bin_files[i], &info)) {
