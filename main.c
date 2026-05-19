@@ -50,6 +50,18 @@ void run_setup() {
         }
     }
 
+    // Auto-normalize version tags to start with 'v'
+    if (esptool_ver[0] != 'v' && esptool_ver[0] != 'V') {
+        char temp_ver[64];
+        snprintf(temp_ver, sizeof(temp_ver), "v%s", esptool_ver);
+        strncpy(esptool_ver, temp_ver, sizeof(esptool_ver) - 1);
+    }
+    if (firmware_ver[0] != 'v' && firmware_ver[0] != 'V') {
+        char temp_ver[64];
+        snprintf(temp_ver, sizeof(temp_ver), "v%s", firmware_ver);
+        strncpy(firmware_ver, temp_ver, sizeof(firmware_ver) - 1);
+    }
+
     printf("\nOptions with versions: esptool %s, firmware %s\n"
            "1. Open esptool Releases page in browser\n"
            "2. Open companion firmware releases page in browser\n"
@@ -87,22 +99,34 @@ void run_setup() {
             system(cmd);
             printf("Extracting ZIP archive...\n");
             system("powershell -Command \"Expand-Archive -Force esptool.zip .\"");
-            printf("\nExtracted esptool successfully!\n");
+            system("powershell -Command \"if (Test-Path esptool-windows-amd64\\esptool.exe) { Move-Item -Force esptool-windows-amd64\\esptool.exe . }\"");
+            system("powershell -Command \"Remove-Item -Recurse -Force esptool.zip, esptool-windows-amd64 -ErrorAction SilentlyContinue\"");
+            printf("\nExtracted and flattened esptool successfully!\n");
 #elif defined(__APPLE__)
             snprintf(cmd, sizeof(cmd), 
                 "ARCH=$(uname -m); "
                 "if [ \"$ARCH\" = \"arm64\" ]; then "
-                "  curl -L -o esptool.tar.gz https://github.com/espressif/esptool/releases/download/%s/esptool-%s-macos-arm64.tar.gz; "
+                "  curl -L -o esptool.tar.gz https://github.com/espressif/esptool/releases/download/%s/esptool-%s-macos-arm64.tar.gz && "
+                "  tar -xzf esptool.tar.gz && "
+                "  mv esptool-macos-arm64/esptool . && "
+                "  chmod +x esptool; "
                 "else "
-                "  curl -L -o esptool.tar.gz https://github.com/espressif/esptool/releases/download/%s/esptool-%s-macos-amd64.tar.gz; "
+                "  curl -L -o esptool.tar.gz https://github.com/espressif/esptool/releases/download/%s/esptool-%s-macos-amd64.tar.gz && "
+                "  tar -xzf esptool.tar.gz && "
+                "  mv esptool-macos-amd64/esptool . && "
+                "  chmod +x esptool; "
                 "fi; "
-                "tar -xzf esptool.tar.gz; "
-                "chmod +x esptool", esptool_ver, esptool_ver, esptool_ver, esptool_ver);
+                "rm -rf esptool.tar.gz esptool-macos-arm64 esptool-macos-amd64", esptool_ver, esptool_ver, esptool_ver, esptool_ver);
             printf("Executing curl & tar extraction...\n");
             system(cmd);
             printf("\nDone! esptool is now installed locally.\n");
 #else
-            snprintf(cmd, sizeof(cmd), "curl -L -o esptool.tar.gz https://github.com/espressif/esptool/releases/download/%s/esptool-%s-linux-amd64.tar.gz && tar -xzf esptool.tar.gz && chmod +x esptool", esptool_ver, esptool_ver);
+            snprintf(cmd, sizeof(cmd), 
+                "curl -L -o esptool.tar.gz https://github.com/espressif/esptool/releases/download/%s/esptool-%s-linux-amd64.tar.gz && "
+                "tar -xzf esptool.tar.gz && "
+                "mv esptool-linux-amd64/esptool . && "
+                "chmod +x esptool; "
+                "rm -rf esptool.tar.gz esptool-linux-amd64", esptool_ver, esptool_ver);
             printf("Executing: %s\n", cmd);
             system(cmd);
             printf("\nDone! esptool is now installed locally.\n");
@@ -184,6 +208,8 @@ void flash_firmware(const char* portName, const char* binPath) {
 #ifdef _WIN32
         if (file_exists("esptool.exe")) {
             esptool_cmd = "esptool.exe";
+        } else if (file_exists("esptool-windows-amd64\\esptool.exe")) {
+            esptool_cmd = "esptool-windows-amd64\\esptool.exe";
         } else if (file_exists("esptool.py")) {
             esptool_cmd = "python esptool.py";
         } else {
@@ -192,6 +218,12 @@ void flash_firmware(const char* portName, const char* binPath) {
 #else
         if (file_exists("./esptool")) {
             esptool_cmd = "./esptool";
+        } else if (file_exists("./esptool-macos-arm64/esptool")) {
+            esptool_cmd = "./esptool-macos-arm64/esptool";
+        } else if (file_exists("./esptool-macos-amd64/esptool")) {
+            esptool_cmd = "./esptool-macos-amd64/esptool";
+        } else if (file_exists("./esptool-linux-amd64/esptool")) {
+            esptool_cmd = "./esptool-linux-amd64/esptool";
         } else if (file_exists("./esptool.py")) {
             esptool_cmd = "python3 ./esptool.py";
         } else {

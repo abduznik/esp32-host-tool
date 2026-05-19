@@ -116,6 +116,49 @@ void test_cli_parsing() {
     printf("  [PASS] CLI parsing and validation logic tests succeeded.\n");
 }
 
+void test_esp_bin_parser() {
+    printf("Running test_esp_bin_parser...\n");
+    
+    // Create a mock firmware buffer of 1024 bytes
+    uint8_t buffer[1024] = {0};
+    // Let's place the magic word 0xabcd5432 at offset 0x100
+    // In little-endian: 32 54 cd ab
+    size_t offset = 0x100;
+    buffer[offset] = 0x32;
+    buffer[offset+1] = 0x54;
+    buffer[offset+2] = 0xCD;
+    buffer[offset+3] = 0xAB;
+    
+    // Copy fake version starts at offset 16 (0x100 + 16 = 0x110)
+    strcpy((char*)&buffer[offset + 16], "v1.2.3-test");
+    // Copy project name starts at offset 48 (0x100 + 48 = 0x130)
+    strcpy((char*)&buffer[offset + 48], "mock-project");
+    // Copy time at 80, date at 96, idf_ver at 112
+    strcpy((char*)&buffer[offset + 80], "12:34:56");
+    strcpy((char*)&buffer[offset + 96], "May 19 2026");
+    strcpy((char*)&buffer[offset + 112], "v5.2-dirty");
+    
+    // Write it to a file
+    FILE* f = fopen("tests/dummy_desc.bin", "wb");
+    assert(f != NULL);
+    fwrite(buffer, 1, sizeof(buffer), f);
+    fclose(f);
+    
+    // Test the parser
+    esp_info_t info;
+    int parsed = detect_esp_bin_info("tests/dummy_desc.bin", &info);
+    assert(parsed == 1);
+    
+    assert(strcmp(info.version, "v1.2.3-test") == 0);
+    assert(strcmp(info.project_name, "mock-project") == 0);
+    assert(strcmp(info.time, "12:34:56") == 0);
+    assert(strcmp(info.date, "May 19 2026") == 0);
+    assert(strcmp(info.idf_ver, "v5.2-dirty") == 0);
+    
+    remove("tests/dummy_desc.bin");
+    printf("  [PASS] ESP32 app descriptor parsing test passed.\n");
+}
+
 int main() {
     printf("=================================\n");
     printf("   ESP32 HOST TOOL TEST SUITE    \n");
@@ -125,6 +168,7 @@ int main() {
     test_serial_invalid();
     test_flash_pipeline();
     test_cli_parsing();
+    test_esp_bin_parser();
 
     printf("\nAll unit tests passed successfully!\n");
     return 0;
