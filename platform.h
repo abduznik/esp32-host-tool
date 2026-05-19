@@ -36,6 +36,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// ESP32 Application Descriptor parser structure
+typedef struct {
+    char version[32];
+    char project_name[32];
+    char time[16];
+    char date[16];
+    char idf_ver[32];
+} esp_info_t;
+
 // Thread operations
 static inline int thread_create(thread_t* thread, THREAD_FUNC (*start_routine)(thread_arg_t), thread_arg_t arg) {
 #ifdef _WIN32
@@ -250,6 +259,76 @@ static inline void list_ports() {
     if (count == 0) {
         printf("No serial ports found.\n");
     }
+}
+
+// Detect ESP32 app descriptor signature in local binary files
+static inline int detect_esp_bin_info(const char* filepath, esp_info_t* info) {
+    FILE* f = fopen(filepath, "rb");
+    if (!f) return 0;
+
+    // Read the first 4096 bytes of the firmware
+    uint8_t buffer[4096];
+    size_t bytesRead = fread(buffer, 1, sizeof(buffer), f);
+    fclose(f);
+
+    if (bytesRead < 256) return 0;
+
+    // Search for the magic word 0xabcd5432 (little-endian: 32 54 cd ab)
+    for (size_t i = 0; i < bytesRead - 256; ++i) {
+        if (buffer[i] == 0x32 && buffer[i+1] == 0x54 && buffer[i+2] == 0xCD && buffer[i+3] == 0xAB) {
+            size_t struct_base = i;
+            memcpy(info->version, &buffer[struct_base + 16], 32);
+            info->version[31] = '\0';
+
+            memcpy(info->project_name, &buffer[struct_base + 48], 32);
+            info->project_name[31] = '\0';
+
+            memcpy(info->time, &buffer[struct_base + 80], 16);
+            info->time[15] = '\0';
+
+            memcpy(info->date, &buffer[struct_base + 96], 16);
+            info->date[15] = '\0';
+
+            memcpy(info->idf_ver, &buffer[struct_base + 112], 32);
+            info->idf_ver[31] = '\0';
+
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// Scan the current working directory for files matching *.bin
+static inline int get_bin_files(char files[][256], int max_files) {
+    int count = 0;
+#ifdef _WIN32
+    WIN32_FIND_DATA findData;
+    HANDLE hFind = FindFirstFile("*.bin", &findData);
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            if (count < max_files) {
+                strncpy(files[count], findData.cFileName, 255);
+                files[count][255] = '\0';
+                count++;
+            }
+        } while (FindNextFile(hFind, &findData) && count < max_files);
+        FindClose(hFind);
+    }
+#else
+    glob_t glob_result;
+    memset(&glob_result, 0, sizeof(glob_result));
+    if (glob("*.bin", 0, NULL, &glob_result) == 0) {
+        for (size_t i = 0; i < glob_result.gl_pathc; ++i) {
+            if (count < max_files) {
+                strncpy(files[count], glob_result.gl_pathv[i], 255);
+                files[count][255] = '\0';
+                count++;
+            }
+        }
+    }
+    globfree(&glob_result);
+#endif
+    return count;
 }
 
 #endif // PLATFORM_H

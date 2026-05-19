@@ -29,14 +29,35 @@ void open_url(const char* url) {
 // Setup and auto-downloader menu
 void run_setup() {
     int choice;
-    printf("\n=== Setup & Download Tools ===\n"
+    char esptool_ver[64] = "v5.2.0";
+    char firmware_ver[64] = "v1.0.4";
+    char temp[64];
+
+    printf("\n=== Setup & Download Tools ===\n");
+    printf("Enter esptool version to use [default: v5.2.0]: ");
+    if (fgets(temp, sizeof(temp), stdin)) {
+        temp[strcspn(temp, "\r\n")] = 0;
+        if (temp[0] != '\0') {
+            strncpy(esptool_ver, temp, sizeof(esptool_ver) - 1);
+        }
+    }
+
+    printf("Enter companion firmware version to use [default: v1.0.4]: ");
+    if (fgets(temp, sizeof(temp), stdin)) {
+        temp[strcspn(temp, "\r\n")] = 0;
+        if (temp[0] != '\0') {
+            strncpy(firmware_ver, temp, sizeof(firmware_ver) - 1);
+        }
+    }
+
+    printf("\nOptions with versions: esptool %s, firmware %s\n"
            "1. Open esptool Releases page in browser\n"
            "2. Open companion firmware releases page in browser\n"
-           "3. Auto-download esptool (v5.2.0) via system curl\n"
-           "4. Auto-download companion firmware (v1.0.4) via system curl\n"
+           "3. Auto-download esptool via system curl\n"
+           "4. Auto-download companion firmware via system curl\n"
            "5. Back to Main Menu\n"
-           "Choice: ");
-    
+           "Choice: ", esptool_ver, firmware_ver);
+
     if (scanf("%d", &choice) != 1) {
         return;
     }
@@ -44,35 +65,54 @@ void run_setup() {
     int c;
     while ((c = getchar()) != '\n' && c != EOF);
 
+    char url[512];
+    char cmd[1024];
+
     switch (choice) {
         case 1:
-            printf("Opening esptool releases page...\n");
-            open_url("https://github.com/espressif/esptool/releases/tag/v5.2.0");
+            snprintf(url, sizeof(url), "https://github.com/espressif/esptool/releases/tag/%s", esptool_ver);
+            printf("Opening %s...\n", url);
+            open_url(url);
             break;
         case 2:
-            printf("Opening companion firmware releases page...\n");
-            open_url("https://github.com/abduznik/esp32-uart-cli/releases/tag/v1.0.4");
+            snprintf(url, sizeof(url), "https://github.com/abduznik/esp32-uart-cli/releases/tag/%s", firmware_ver);
+            printf("Opening %s...\n", url);
+            open_url(url);
             break;
         case 3:
-            printf("Auto-downloading esptool v5.2.0...\n");
+            printf("Auto-downloading esptool %s...\n", esptool_ver);
 #ifdef _WIN32
-            system("curl -L -o esptool.zip https://github.com/espressif/esptool/releases/download/v5.2.0/esptool-v5.2.0-win64.zip");
-            printf("\nDownloaded esptool.zip! You can extract it in this folder.\n");
+            snprintf(cmd, sizeof(cmd), "curl -L -o esptool.zip https://github.com/espressif/esptool/releases/download/%s/esptool-%s-windows-amd64.zip", esptool_ver, esptool_ver);
+            printf("Executing: %s\n", cmd);
+            system(cmd);
+            printf("Extracting ZIP archive...\n");
+            system("powershell -Command \"Expand-Archive -Force esptool.zip .\"");
+            printf("\nExtracted esptool successfully!\n");
 #elif defined(__APPLE__)
-            system("curl -L -o esptool.zip https://github.com/espressif/esptool/releases/download/v5.2.0/esptool-v5.2.0-macos.zip");
-            printf("\nUnzipping esptool...\n");
-            system("unzip -o esptool.zip && chmod +x esptool");
-            printf("Done! esptool is now installed locally.\n");
+            snprintf(cmd, sizeof(cmd), 
+                "ARCH=$(uname -m); "
+                "if [ \"$ARCH\" = \"arm64\" ]; then "
+                "  curl -L -o esptool.tar.gz https://github.com/espressif/esptool/releases/download/%s/esptool-%s-macos-arm64.tar.gz; "
+                "else "
+                "  curl -L -o esptool.tar.gz https://github.com/espressif/esptool/releases/download/%s/esptool-%s-macos-amd64.tar.gz; "
+                "fi; "
+                "tar -xzf esptool.tar.gz; "
+                "chmod +x esptool", esptool_ver, esptool_ver, esptool_ver, esptool_ver);
+            printf("Executing curl & tar extraction...\n");
+            system(cmd);
+            printf("\nDone! esptool is now installed locally.\n");
 #else
-            system("curl -L -o esptool.zip https://github.com/espressif/esptool/releases/download/v5.2.0/esptool-v5.2.0-linux-amd64.zip");
-            printf("\nUnzipping esptool...\n");
-            system("unzip -o esptool.zip && chmod +x esptool");
-            printf("Done! esptool is now installed locally.\n");
+            snprintf(cmd, sizeof(cmd), "curl -L -o esptool.tar.gz https://github.com/espressif/esptool/releases/download/%s/esptool-%s-linux-amd64.tar.gz && tar -xzf esptool.tar.gz && chmod +x esptool", esptool_ver, esptool_ver);
+            printf("Executing: %s\n", cmd);
+            system(cmd);
+            printf("\nDone! esptool is now installed locally.\n");
 #endif
             break;
         case 4:
-            printf("Auto-downloading companion firmware v1.0.4...\n");
-            system("curl -L -o firmware.bin https://github.com/abduznik/esp32-uart-cli/releases/download/v1.0.4/firmware.bin");
+            printf("Auto-downloading companion firmware %s...\n", firmware_ver);
+            snprintf(cmd, sizeof(cmd), "curl -L -o firmware.bin https://github.com/abduznik/esp32-uart-cli/releases/download/%s/firmware.bin", firmware_ver);
+            printf("Executing: %s\n", cmd);
+            system(cmd);
             printf("Done! firmware.bin is now downloaded in this folder.\n");
             break;
         case 5:
@@ -221,7 +261,6 @@ int main(int argc, char* argv[]) {
 
     // Interactive menu fallback
     char portName[256];
-    char binPath[512];
     int choice;
 
     while (1) {
@@ -283,21 +322,86 @@ int main(int argc, char* argv[]) {
 
         if (choice == 3) {
             run_setup();
-            continue; // Re-run port selection / main loop after setup actions
+            continue; // Re-run main selection/port list loop
         }
 
         switch (choice) {
             case 1:
                 run_monitor(portName, 115200);
                 break;
-            case 2:
-                printf("Enter firmware .bin path: ");
-                if (fgets(binPath, sizeof(binPath), stdin)) {
-                    // remove trailing newline
-                    binPath[strcspn(binPath, "\r\n")] = 0;
-                    flash_firmware(portName, binPath);
+            case 2: {
+                char bin_files[16][256];
+                int bin_count = get_bin_files(bin_files, 16);
+                char chosen_bin[512] = {0};
+
+                if (bin_count > 0) {
+                    printf("\n--- Found firmware .bin files in current directory ---\n");
+                    for (int i = 0; i < bin_count; ++i) {
+                        esp_info_t info;
+                        if (detect_esp_bin_info(bin_files[i], &info)) {
+                            printf("[%d] %s (App: %s, Ver: %s, Built: %s %s, IDF: %s)\n",
+                                   i, bin_files[i], info.project_name, info.version, info.date, info.time, info.idf_ver);
+                        } else {
+                            printf("[%d] %s (Generic ESP32 Bin)\n", i, bin_files[i]);
+                        }
+                    }
+                    printf("\nEnter index of .bin to flash, or type a custom file path: ");
+                    
+                    char choice_str[256];
+                    if (fgets(choice_str, sizeof(choice_str), stdin)) {
+                        choice_str[strcspn(choice_str, "\r\n")] = 0;
+                        
+                        // Check if numeric index
+                        int is_num = 1;
+                        if (choice_str[0] == '\0') {
+                            is_num = 0;
+                        } else {
+                            for (int i = 0; choice_str[i] != '\0'; ++i) {
+                                if (choice_str[i] < '0' || choice_str[i] > '9') {
+                                    is_num = 0;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (is_num) {
+                            int b_idx = atoi(choice_str);
+                            if (b_idx >= 0 && b_idx < bin_count) {
+                                strncpy(chosen_bin, bin_files[b_idx], sizeof(chosen_bin) - 1);
+                                chosen_bin[sizeof(chosen_bin) - 1] = '\0';
+                                printf("Selected binary: %s\n", chosen_bin);
+                            } else {
+                                printf("Invalid index. Falling back to typing custom path.\n");
+                            }
+                        } else {
+                            strncpy(chosen_bin, choice_str, sizeof(chosen_bin) - 1);
+                            chosen_bin[sizeof(chosen_bin) - 1] = '\0';
+                        }
+                    }
+                }
+                
+                // If no binary files found, or custom path selected
+                if (chosen_bin[0] == '\0') {
+                    printf("Enter firmware .bin path: ");
+                    if (fgets(chosen_bin, sizeof(chosen_bin), stdin)) {
+                        chosen_bin[strcspn(chosen_bin, "\r\n")] = 0;
+                    }
+                }
+
+                if (chosen_bin[0] != '\0') {
+                    esp_info_t info;
+                    if (detect_esp_bin_info(chosen_bin, &info)) {
+                        printf("\nDetected ESP32 Firmware Signature:\n"
+                               "  Project Name: %s\n"
+                               "  App Version:  %s\n"
+                               "  Compile Date: %s %s\n"
+                               "  IDF Version:  %s\n",
+                               info.project_name, info.version, info.date, info.time, info.idf_ver);
+                    }
+                    flash_firmware(portName, chosen_bin);
                 }
                 break;
+            }
             default:
                 printf("Invalid Choice. Exiting.\n");
                 break;
