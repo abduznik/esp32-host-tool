@@ -35,6 +35,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 // ESP32 Application Descriptor parser structure
 typedef struct {
