@@ -70,6 +70,66 @@ The application serves as a generic diagnostic and deployment utility for flashi
 
 ---
 
+## UART Companion Example & Limitations
+
+To test interactive serial communications using this tool, upload the following non-blocking UART parser sketch to your microcontroller (e.g., ESP32, Arduino).
+
+### High-Reliability Non-Blocking Sketch
+
+```cpp
+#define LED_PIN 2
+const long SERIAL_BAUD = 115200;
+
+char rxBuffer[64];
+int rxIndex = 0;
+bool ledState = false;
+
+void setup() {
+  Serial.begin(SERIAL_BAUD);
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, ledState ? HIGH : LOW);
+  Serial.println("System Ready. Type 'HELLO' and press ENTER.");
+}
+
+void loop() {
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r') {
+      if (rxIndex > 0) {
+        rxBuffer[rxIndex] = '\0';
+        String input = String(rxBuffer);
+        input.trim();
+        
+        if (input == "HELLO") {
+          ledState = !ledState;
+          digitalWrite(LED_PIN, ledState ? HIGH : LOW);
+          Serial.print("LED toggled! Current state: ");
+          Serial.println(ledState ? "ON" : "OFF");
+        } else {
+          Serial.print("Unknown command: ");
+          Serial.println(input);
+        }
+        rxIndex = 0;
+      }
+    } else {
+      if (rxIndex < (int)sizeof(rxBuffer) - 1) {
+        rxBuffer[rxIndex++] = c;
+      }
+    }
+  }
+}
+```
+
+### Technical Limitations of Blocking Serial API
+Many basic microcontroller tutorials recommend standard blocking utilities like `Serial.readStringUntil('\n')`. However, those methods introduce significant limitations when operating with low-level host serial drivers:
+1. **Timeout-Driven Delays:** Blocking read calls default to a 1-second timeout. If a line terminator is delayed or missing, the microcontroller halts execution for a full second, causing severe UI latency.
+2. **Buffer Corruption / Infinite Echo Loops:** Under heavy data streams or legacy core implementations (e.g., older ESP32 Arduino Core versions), blocking routines can fail to flush internal registers properly upon timeout, returning stale buffer content in an infinite feedback loop.
+3. **Line Ending Sensitivity:** Simple parsers frequently fail to strip carriage returns (`\r`), leading to parsing mismatches. 
+
+Always use a non-blocking character-by-character buffer structure (as shown above) to ensure stable, robust, and zero-latency serial interfaces.
+
+---
+
 ## Getting Started & Compilation
 
 ### Prerequisites
