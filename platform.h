@@ -3,6 +3,7 @@
 
 #ifdef _WIN32
     #include <windows.h>
+    #define usleep(us) Sleep((us) / 1000)
     typedef HANDLE serial_t;
     #define INVALID_SERIAL INVALID_HANDLE_VALUE
     
