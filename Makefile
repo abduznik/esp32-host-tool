@@ -23,15 +23,15 @@ endif
 
 all: $(TARGET)
 
-$(TARGET): main.c platform.h
-	$(CC) $(CFLAGS) main.c -o $(TARGET) $(LDFLAGS)
+$(TARGET): main.c common.c setup.c monitor.c flasher.c platform.h common.h setup.h monitor.h flasher.h
+	$(CC) $(CFLAGS) main.c common.c setup.c monitor.c flasher.c -o $(TARGET) $(LDFLAGS)
 
 # Compile tests
 $(TEST_MOCK_ESPTOOL): tests/mock_esptool.c
 	$(CC) $(CFLAGS) tests/mock_esptool.c -o $(TEST_MOCK_ESPTOOL)
 
-$(TEST_RUNNER): tests/test_runner.c platform.h main.c
-	$(CC) $(CFLAGS) tests/test_runner.c -o $(TEST_RUNNER) $(LDFLAGS)
+$(TEST_RUNNER): tests/test_runner.c platform.h main.c common.c setup.c monitor.c flasher.c common.h setup.h monitor.h flasher.h
+	$(CC) $(CFLAGS) tests/test_runner.c common.c setup.c monitor.c flasher.c -o $(TEST_RUNNER) $(LDFLAGS)
 
 test: all $(TEST_MOCK_ESPTOOL) $(TEST_RUNNER)
 	@echo "================================="
