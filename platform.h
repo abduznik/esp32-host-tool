@@ -298,8 +298,9 @@ static inline int detect_esp_bin_info(const char* filepath, esp_info_t* info) {
     }
     return 0;
 }
+extern const char* g_exe_path;
 
-// Scan the current working directory for files matching *.bin
+// Scan the current working directory and executable directory for files matching *.bin
 static inline int get_bin_files(char files[][256], int max_files) {
     int count = 0;
 #ifdef _WIN32
@@ -315,6 +316,47 @@ static inline int get_bin_files(char files[][256], int max_files) {
         } while (FindNextFile(hFind, &findData) && count < max_files);
         FindClose(hFind);
     }
+    
+    if (g_exe_path && count < max_files) {
+        char exe_dir[512] = {0};
+        const char* last_slash = strrchr(g_exe_path, '/');
+        const char* last_backslash = strrchr(g_exe_path, '\\');
+        const char* last_sep = (last_slash > last_backslash) ? last_slash : last_backslash;
+        
+        if (last_sep) {
+            size_t len = last_sep - g_exe_path + 1;
+            if (len < sizeof(exe_dir)) {
+                strncpy(exe_dir, g_exe_path, len);
+                exe_dir[len] = '\0';
+                
+                char pattern[1024];
+                snprintf(pattern, sizeof(pattern), "%s*.bin", exe_dir);
+                
+                hFind = FindFirstFile(pattern, &findData);
+                if (hFind != INVALID_HANDLE_VALUE) {
+                    do {
+                        char full_path[512];
+                        snprintf(full_path, sizeof(full_path), "%s%s", exe_dir, findData.cFileName);
+                        
+                        int duplicate = 0;
+                        for (int j = 0; j < count; ++j) {
+                            if (strcmp(files[j], full_path) == 0 || strcmp(files[j], findData.cFileName) == 0) {
+                                duplicate = 1;
+                                break;
+                            }
+                        }
+                        
+                        if (!duplicate && count < max_files) {
+                            strncpy(files[count], full_path, 255);
+                            files[count][255] = '\0';
+                            count++;
+                        }
+                    } while (FindNextFile(hFind, &findData) && count < max_files);
+                    FindClose(hFind);
+                }
+            }
+        }
+    }
 #else
     glob_t glob_result;
     memset(&glob_result, 0, sizeof(glob_result));
@@ -328,6 +370,44 @@ static inline int get_bin_files(char files[][256], int max_files) {
         }
     }
     globfree(&glob_result);
+
+    if (g_exe_path && count < max_files) {
+        char exe_dir[512] = {0};
+        const char* last_slash = strrchr(g_exe_path, '/');
+        const char* last_backslash = strrchr(g_exe_path, '\\');
+        const char* last_sep = (last_slash > last_backslash) ? last_slash : last_backslash;
+        
+        if (last_sep) {
+            size_t len = last_sep - g_exe_path + 1;
+            if (len < sizeof(exe_dir)) {
+                strncpy(exe_dir, g_exe_path, len);
+                exe_dir[len] = '\0';
+                
+                char pattern[1024];
+                snprintf(pattern, sizeof(pattern), "%s*.bin", exe_dir);
+                
+                glob_t glob_result2;
+                memset(&glob_result2, 0, sizeof(glob_result2));
+                if (glob(pattern, 0, NULL, &glob_result2) == 0) {
+                    for (size_t i = 0; i < glob_result2.gl_pathc; ++i) {
+                        int duplicate = 0;
+                        for (int j = 0; j < count; ++j) {
+                            if (strcmp(files[j], glob_result2.gl_pathv[i]) == 0) {
+                                duplicate = 1;
+                                break;
+                            }
+                        }
+                        if (!duplicate && count < max_files) {
+                            strncpy(files[count], glob_result2.gl_pathv[i], 255);
+                            files[count][255] = '\0';
+                            count++;
+                        }
+                    }
+                    globfree(&glob_result2);
+                }
+            }
+        }
+    }
 #endif
     return count;
 }

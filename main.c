@@ -6,12 +6,52 @@
 // Global control to run the serial monitor read loop
 volatile int monitor_running = 1;
 
+const char* g_exe_path = NULL;
+
 // Helper to check if a file exists
 int file_exists(const char* filename) {
     FILE* f = fopen(filename, "r");
     if (f) {
         fclose(f);
         return 1;
+    }
+    return 0;
+}
+
+void resolve_path_relative_to_exe(const char* relative_path, char* resolved_path, size_t max_len) {
+    if (g_exe_path) {
+        const char* last_slash = strrchr(g_exe_path, '/');
+        const char* last_backslash = strrchr(g_exe_path, '\\');
+        const char* last_sep = (last_slash > last_backslash) ? last_slash : last_backslash;
+        
+        if (last_sep) {
+            size_t dir_len = last_sep - g_exe_path + 1;
+            if (dir_len < max_len) {
+                strncpy(resolved_path, g_exe_path, dir_len);
+                resolved_path[dir_len] = '\0';
+                strncat(resolved_path, relative_path, max_len - dir_len - 1);
+                return;
+            }
+        }
+    }
+    strncpy(resolved_path, relative_path, max_len - 1);
+    resolved_path[max_len - 1] = '\0';
+}
+
+int resolve_file_if_exists(const char* input_path, char* output_path, size_t max_len) {
+    if (file_exists(input_path)) {
+        strncpy(output_path, input_path, max_len - 1);
+        output_path[max_len - 1] = '\0';
+        return 1;
+    }
+    if (input_path[0] != '/' && !(input_path[0] != '\0' && input_path[1] == ':')) {
+        char resolved[512];
+        resolve_path_relative_to_exe(input_path, resolved, sizeof(resolved));
+        if (file_exists(resolved)) {
+            strncpy(output_path, resolved, max_len - 1);
+            output_path[max_len - 1] = '\0';
+            return 1;
+        }
     }
     return 0;
 }
@@ -214,34 +254,38 @@ void run_monitor(const char* portName, int baudRate) {
 void flash_firmware(const char* portName, int baudRate, const char* binPath) {
     char command[2048];
     const char* esptool_cmd = getenv("ESPTOOL");
-    
+    char resolved_esptool[512] = {0};
+    char resolved_bin[512] = {0};
+
     // Auto-discover local esptool
     if (!esptool_cmd) {
 #ifdef _WIN32
-        if (file_exists("esptool.exe")) {
-            esptool_cmd = "esptool.exe";
-        } else if (file_exists("esptool-windows-amd64\\esptool.exe")) {
-            esptool_cmd = "esptool-windows-amd64\\esptool.exe";
-        } else if (file_exists("esptool.py")) {
+        if (resolve_file_if_exists("esptool.exe", resolved_esptool, sizeof(resolved_esptool))) {
+            esptool_cmd = resolved_esptool;
+        } else if (resolve_file_if_exists("esptool.py", resolved_esptool, sizeof(resolved_esptool))) {
             esptool_cmd = "python esptool.py";
         } else {
             esptool_cmd = "esptool";
         }
 #else
-        if (file_exists("./esptool")) {
-            esptool_cmd = "./esptool";
-        } else if (file_exists("./esptool-macos-arm64/esptool")) {
-            esptool_cmd = "./esptool-macos-arm64/esptool";
-        } else if (file_exists("./esptool-macos-amd64/esptool")) {
-            esptool_cmd = "./esptool-macos-amd64/esptool";
-        } else if (file_exists("./esptool-linux-amd64/esptool")) {
-            esptool_cmd = "./esptool-linux-amd64/esptool";
-        } else if (file_exists("./esptool.py")) {
+        if (resolve_file_if_exists("esptool", resolved_esptool, sizeof(resolved_esptool))) {
+            esptool_cmd = resolved_esptool;
+        } else if (resolve_file_if_exists("esptool-macos-arm64/esptool", resolved_esptool, sizeof(resolved_esptool))) {
+            esptool_cmd = resolved_esptool;
+        } else if (resolve_file_if_exists("esptool-macos-amd64/esptool", resolved_esptool, sizeof(resolved_esptool))) {
+            esptool_cmd = resolved_esptool;
+        } else if (resolve_file_if_exists("esptool-linux-amd64/esptool", resolved_esptool, sizeof(resolved_esptool))) {
+            esptool_cmd = resolved_esptool;
+        } else if (resolve_file_if_exists("esptool.py", resolved_esptool, sizeof(resolved_esptool))) {
             esptool_cmd = "python3 ./esptool.py";
         } else {
             esptool_cmd = "esptool";
         }
 #endif
+    }
+
+    if (resolve_file_if_exists(binPath, resolved_bin, sizeof(resolved_bin))) {
+        binPath = resolved_bin;
     }
 
     printf("\nInfo: Starting Flash Process on %s...\n", portName);
@@ -265,6 +309,7 @@ void flash_firmware(const char* portName, int baudRate, const char* binPath) {
 }
 
 int main(int argc, char* argv[]) {
+    g_exe_path = argv[0];
     if (argc > 1) {
         if (strcmp(argv[1], "ports") == 0) {
             list_ports();
