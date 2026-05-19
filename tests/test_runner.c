@@ -8,7 +8,7 @@
 #endif
 
 #define main app_main
-#include "../main.c"
+#include "../main/main.c"
 #undef main
 
 // Helper to write a dummy file

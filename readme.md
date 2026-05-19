@@ -17,12 +17,12 @@ The application serves as a generic diagnostic and deployment utility for flashi
 * **Language:** Pure C (no C++ standard library dependencies).
 * **Dependencies:** Zero external libraries. Uses native OS primitives: Win32 API on Windows, and POSIX `pthread`/`termios`/`glob` on Linux/macOS.
 * **Modular Structure:** The codebase is fully modularized into isolated functional domains:
-  - `main.c`: CLI router and main menu controller.
-  - `common.c` / `common.h`: Shared resources, platform helpers, and path resolvers.
-  - `monitor.c` / `monitor.h`: Dual-thread non-blocking serial communication driver.
-  - `flasher.c` / `flasher.h`: Firmware signature verification and flashing pipeline wrapper.
-  - `setup.c` / `setup.h`: Automated installation and setup script.
-  - `platform.h`: Unified cross-platform serial and threading abstraction layer.
+  - `main/main.c`: CLI router and main menu controller.
+  - `main/common.c` / `main/common.h`: Shared resources, platform helpers, and path resolvers.
+  - `main/monitor.c` / `main/monitor.h`: Dual-thread non-blocking serial communication driver.
+  - `main/flasher.c` / `main/flasher.h`: Firmware signature verification and flashing pipeline wrapper.
+  - `main/setup.c` / `main/setup.h`: Automated installation and setup script.
+  - `main/platform.h`: Unified cross-platform serial and threading abstraction layer.
 * **Build System:** Makefile with automatic platform detection (works with GCC/Clang on Unix, and MinGW on Windows).
 
 ---
