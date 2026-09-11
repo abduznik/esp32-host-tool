@@ -30,6 +30,12 @@ a:hover{text-decoration:underline}
 .tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .pnl{display:none}.pnl.on{display:block}
 
+/* repo selector */
+.repo-sel{display:flex;gap:.4rem;margin-bottom:.6rem}
+.repo-btn{padding:.3rem .6rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--t2);cursor:pointer;font-size:.72rem;transition:.15s}
+.repo-btn:hover{border-color:var(--info);color:var(--t1)}
+.repo-btn.on{border-color:var(--info);color:var(--info);background:rgba(88,166,255,.08)}
+
 /* release picker */
 .rel-list{max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-bottom:.6rem}
 .rel{padding:.5rem .7rem;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:.82rem;transition:.1s}
@@ -41,6 +47,7 @@ a:hover{text-decoration:underline}
 .ast{padding:.35rem .7rem;font-family:var(--mono);font-size:.78rem;color:var(--t2);cursor:pointer;border-radius:4px;transition:.1s;margin-top:.25rem}
 .ast:hover{background:var(--bg3);color:var(--t1)}
 .ast.sel{color:var(--accent);background:rgba(229,53,53,.1)}
+.no-bin{font-size:.78rem;color:var(--warn);margin-top:.4rem;padding:.5rem;background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.2);border-radius:4px}
 
 /* dropzone */
 .drop{border:2px dashed var(--border);border-radius:8px;padding:1.75rem;text-align:center;color:var(--t2);cursor:pointer;transition:.2s}
@@ -81,7 +88,7 @@ a:hover{text-decoration:underline}
 .term .ts{color:#555}
 
 /* status */
-.status{display:flex;align-items:center;gap:.5rem;padding:.6rem .85rem;border-radius:6px;font-size:.82rem;margin-top:.6rem;display:none}
+.status{align-items:center;gap:.5rem;padding:.6rem .85rem;border-radius:6px;font-size:.82rem;margin-top:.6rem;display:none}
 .status.show{display:flex}
 .status.ok{background:rgba(63,185,80,.12);border:1px solid var(--ok);color:var(--ok)}
 .status.err{background:rgba(248,81,73,.12);border:1px solid var(--err);color:var(--err)}
@@ -123,8 +130,9 @@ a:hover{text-decoration:underline}
     </div>
 
     <div class="pnl on" id="pnl-release">
-      <div style="margin-bottom:.5rem;font-size:.78rem;color:var(--t2)">
-        Fetching releases from <a href="https://github.com/abduznik/esp32-host-tool/releases" target="_blank">abduznik/esp32-host-tool</a>...
+      <div class="repo-sel">
+        <div class="repo-btn on" data-repo="firmware">Firmware (esp32-uart-cli)</div>
+        <div class="repo-btn" data-repo="tool">Host Tool (esp32-host-tool)</div>
       </div>
       <div class="rel-list" id="relList"><div style="padding:1rem;text-align:center;color:var(--t2)">Loading releases...</div></div>
       <div id="assetList"></div>
@@ -255,6 +263,8 @@ let firmwareData = null;
 let firmwareName = "";
 let esploader = null;
 let port = null;
+let allReleases = { firmware: [], tool: [] };
+let activeRepo = "firmware";
 
 // ─── DOM refs ───
 const $ = (s) => document.querySelector(s);
@@ -275,6 +285,12 @@ const statusMsg = $("#statusMsg");
 const statusIcon = $("#statusIcon");
 const term = $("#terminal");
 
+// ─── Repo config ───
+const REPOS = {
+  firmware: { owner: "abduznik", repo: "esp32-uart-cli", label: "Firmware" },
+  tool:     { owner: "abduznik", repo: "esp32-host-tool", label: "Host Tool" },
+};
+
 // ─── Tabs ───
 document.querySelectorAll(".tab").forEach(t => {
   t.addEventListener("click", () => {
@@ -282,6 +298,16 @@ document.querySelectorAll(".tab").forEach(t => {
     document.querySelectorAll(".pnl").forEach(x => x.classList.remove("on"));
     t.classList.add("on");
     $(`#pnl-${t.dataset.tab}`).classList.add("on");
+  });
+});
+
+// ─── Repo selector ───
+document.querySelectorAll(".repo-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".repo-btn").forEach(x => x.classList.remove("on"));
+    btn.classList.add("on");
+    activeRepo = btn.dataset.repo;
+    renderReleases(allReleases[activeRepo]);
   });
 });
 
@@ -321,53 +347,65 @@ function showProgress(pct, msg) {
 function hideProgress() { progWrap.classList.remove("show"); }
 
 // ─── Releases ───
-let selectedRelease = null;
 let selectedAsset = null;
 
-async function loadReleases() {
+async function fetchReleases(repoKey) {
+  const { owner, repo } = REPOS[repoKey];
   try {
-    const resp = await fetch("https://api.github.com/repos/abduznik/esp32-host-tool/releases?per_page=10");
-    if (!resp.ok) throw new Error(`GitHub API ${resp.status}`);
-    const releases = await resp.json();
-
-    if (!releases.length) {
-      relList.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--t2)">No releases found. Use "Local File" tab.</div>`;
-      return;
-    }
-
-    relList.innerHTML = releases.map((r, i) => `
-      <div class="rel" data-idx="${i}">
-        <div>
-          <div style="font-weight:500">${r.name || r.tag_name}</div>
-          <div class="dt">${new Date(r.published_at).toLocaleDateString()}</div>
-        </div>
-        <div class="tag">${r.tag_name}</div>
-      </div>
-    `).join("");
-
-    relList.querySelectorAll(".rel").forEach(el => {
-      el.addEventListener("click", () => {
-        relList.querySelectorAll(".rel").forEach(x => x.classList.remove("sel"));
-        el.classList.add("sel");
-        const idx = parseInt(el.dataset.idx);
-        selectedRelease = releases[idx];
-        renderAssets(selectedRelease);
-      });
-    });
-
-    // Auto-select first
-    if (releases.length) {
-      relList.querySelector(".rel").click();
-    }
+    const resp = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases?per_page=10`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    allReleases[repoKey] = data.filter(r => !r.draft);
+    return allReleases[repoKey];
   } catch (e) {
-    relList.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--err)">Failed to load releases: ${e.message}.<br>Use "Local File" tab instead.</div>`;
+    console.error(`Failed to load ${repoKey} releases:`, e);
+    allReleases[repoKey] = [];
+    return [];
   }
+}
+
+function renderReleases(releases) {
+  assetList.innerHTML = "";
+
+  if (!releases.length) {
+    relList.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--t2)">No releases found.</div>`;
+    return;
+  }
+
+  relList.innerHTML = releases.map((r, i) => `
+    <div class="rel" data-idx="${i}">
+      <div>
+        <div style="font-weight:500">${r.name || r.tag_name}</div>
+        <div class="dt">${new Date(r.published_at).toLocaleDateString()}</div>
+      </div>
+      <div class="tag">${r.tag_name}</div>
+    </div>
+  `).join("");
+
+  relList.querySelectorAll(".rel").forEach(el => {
+    el.addEventListener("click", () => {
+      relList.querySelectorAll(".rel").forEach(x => x.classList.remove("sel"));
+      el.classList.add("sel");
+      const idx = parseInt(el.dataset.idx);
+      renderAssets(releases[idx]);
+    });
+  });
+
+  // Auto-select first
+  if (releases.length) relList.querySelector(".rel").click();
 }
 
 function renderAssets(release) {
   const bins = release.assets.filter(a => a.name.endsWith(".bin"));
+
   if (!bins.length) {
-    assetList.innerHTML = `<div style="font-size:.78rem;color:var(--t2);margin-top:.4rem">No .bin assets in this release.</div>`;
+    const assetNames = release.assets.map(a => a.name).join(", ");
+    assetList.innerHTML = `
+      <div class="no-bin">
+        ⚠ No <code>.bin</code> firmware in this release.<br>
+        <span style="color:var(--t2)">Assets: ${assetNames || "none"}</span><br>
+        <span style="color:var(--t2)">Use the "Local File" tab to flash a .bin file, or switch to Firmware releases.</span>
+      </div>`;
     selectedAsset = null;
     updateFlashBtn();
     return;
@@ -384,13 +422,14 @@ function renderAssets(release) {
       assetList.querySelectorAll(".ast").forEach(x => x.classList.remove("sel"));
       el.classList.add("sel");
       const idx = parseInt(el.dataset.idx);
-      selectedAsset = bins[idx];
+      const asset = bins[idx];
       showStatus("Downloading firmware...", "info");
       try {
-        const resp = await fetch(selectedAsset.browser_download_url);
+        const resp = await fetch(asset.browser_download_url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const buf = await resp.arrayBuffer();
         firmwareData = new Uint8Array(buf);
-        firmwareName = selectedAsset.name;
+        firmwareName = asset.name;
         showStatus(`Loaded ${firmwareName} (${(firmwareData.length / 1024).toFixed(1)} KB)`, "ok");
         updateFlashBtn();
       } catch (e) {
@@ -443,7 +482,7 @@ $("#fileRemove").addEventListener("click", () => {
 function updateFlashBtn() {
   const ready = firmwareData !== null;
   btnFlash.disabled = !ready;
-  btnErase.disabled = false; // erase doesn't need firmware
+  btnErase.disabled = false;
 }
 
 // ─── Web Serial compatibility check ───
@@ -476,7 +515,6 @@ btnFlash.addEventListener("click", async () => {
   showProgress(0, "Requesting serial port...");
 
   try {
-    // Request port
     port = await navigator.serial.requestPort();
     showProgress(2, "Opening serial connection...");
 
@@ -494,7 +532,6 @@ btnFlash.addEventListener("click", async () => {
     termLog(`Connected to: ${chip}`, "#0f0");
     showStatus(`Connected to ${chip}`, "ok");
 
-    // Flash
     showProgress(20, "Flashing firmware...");
     const flashOpts = {
       fileArray: [{ data: firmwareData, address: addr }],
@@ -507,10 +544,7 @@ btnFlash.addEventListener("click", async () => {
         const pct = 20 + (written / total) * 75;
         showProgress(pct, `Writing: ${(written / 1024).toFixed(0)} / ${(total / 1024).toFixed(0)} KB`);
       },
-      calculateMD5Hash: (image) => {
-        // Simple hash — esptool-js handles verification internally
-        return "";
-      },
+      calculateMD5Hash: (image) => "",
     };
 
     await esploader.writeFlash(flashOpts);
@@ -518,7 +552,6 @@ btnFlash.addEventListener("click", async () => {
     termLog("✓ Firmware flashed successfully!", "#0f0");
     showStatus(`Successfully flashed ${firmwareName} to ${chip}`, "ok");
 
-    // Hard reset
     await esploader.after("hard_reset");
     termLog("Device reset.", "#0f0");
 
@@ -571,8 +604,10 @@ btnErase.addEventListener("click", async () => {
   }
 });
 
-// ─── Init ───
-loadReleases();
+// ─── Init: load both repos in parallel ───
+Promise.all([fetchReleases("firmware"), fetchReleases("tool")]).then(() => {
+  renderReleases(allReleases[activeRepo]);
+});
 </script>
 </body>
 </html>
