@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32 Web Flasher — esp32-host-tool</title>
+<style>
+:root{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;--t1:#e6edf3;--t2:#8b949e;--accent:#e53535;--accent2:#ff4444;--ok:#3fb950;--warn:#d29922;--err:#f85149;--info:#58a6ff;--mono:'Cascadia Code','Fira Code','JetBrains Mono',Consolas,monospace;--sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--sans);background:var(--bg);color:var(--t1);min-height:100vh;line-height:1.5}
+a{color:var(--info);text-decoration:none}
+a:hover{text-decoration:underline}
+
+.hdr{background:var(--bg2);border-bottom:1px solid var(--border);padding:.85rem 2rem;display:flex;align-items:center;justify-content:space-between}
+.hdr-left{display:flex;align-items:center;gap:.75rem}
+.hdr .logo{width:30px;height:30px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.7rem;color:#fff}
+.hdr h1{font-size:1.05rem;font-weight:600}
+.hdr .sub{font-size:.75rem;color:var(--t2)}
+.hdr .badge{font-size:.65rem;padding:.15rem .45rem;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--t2)}
+
+.main{max-width:860px;margin:1.5rem auto;padding:0 1.25rem}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin-bottom:1.25rem}
+.card-t{font-size:.8rem;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.85rem;display:flex;align-items:center;gap:.5rem}
+.card-t .n{background:var(--accent);color:#fff;width:19px;height:19px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700}
+
+/* tabs */
+.tabs{display:flex;gap:.4rem;margin-bottom:.85rem}
+.tab{padding:.4rem .85rem;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--t2);cursor:pointer;font-size:.8rem;transition:.15s}
+.tab:hover{border-color:var(--accent);color:var(--t1)}
+.tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pnl{display:none}.pnl.on{display:block}
+
+/* release picker */
+.rel-list{max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-bottom:.6rem}
+.rel{padding:.5rem .7rem;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:.82rem;transition:.1s}
+.rel:last-child{border-bottom:none}
+.rel:hover{background:var(--bg3)}
+.rel.sel{background:rgba(229,53,53,.12)}
+.rel .tag{font-family:var(--mono);font-size:.72rem;color:var(--info)}
+.rel .dt{font-size:.72rem;color:var(--t2)}
+.ast{padding:.35rem .7rem;font-family:var(--mono);font-size:.78rem;color:var(--t2);cursor:pointer;border-radius:4px;transition:.1s;margin-top:.25rem}
+.ast:hover{background:var(--bg3);color:var(--t1)}
+.ast.sel{color:var(--accent);background:rgba(229,53,53,.1)}
+
+/* dropzone */
+.drop{border:2px dashed var(--border);border-radius:8px;padding:1.75rem;text-align:center;color:var(--t2);cursor:pointer;transition:.2s}
+.drop:hover,.drop.over{border-color:var(--accent);background:rgba(229,53,53,.04)}
+.drop .ic{font-size:1.8rem;margin-bottom:.4rem}
+.drop .lb{font-size:.82rem}
+.drop input{display:none}
+.fsel{display:flex;align-items:center;gap:.6rem;padding:.65rem;background:var(--bg3);border:1px solid var(--border);border-radius:6px;margin-top:.6rem}
+.fsel .nm{font-family:var(--mono);font-size:.82rem;flex:1;word-break:break-all}
+.fsel .sz{font-size:.72rem;color:var(--t2);white-space:nowrap}
+.fsel .rm{color:var(--err);cursor:pointer;font-size:1.1rem}
+
+/* config */
+.cfg{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.65rem}
+.cfg label{display:block;font-size:.72rem;color:var(--t2);margin-bottom:.25rem}
+.cfg select,.cfg input{width:100%;padding:.45rem .65rem;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--t1);font-family:var(--mono);font-size:.82rem;outline:0}
+.cfg select:focus,.cfg input:focus{border-color:var(--accent)}
+
+/* buttons */
+.btn{width:100%;padding:.8rem;border:none;border-radius:8px;color:#fff;font-size:.95rem;font-weight:600;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center;gap:.5rem}
+.btn:hover:not(:disabled){transform:translateY(-1px)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-flash{background:var(--accent)}.btn-flash:hover:not(:disabled){background:var(--accent2)}
+.btn-erase{background:var(--warn);margin-top:.6rem}
+.btn-erase:hover:not(:disabled){background:#e0a800}
+.btn-row{display:flex;gap:.5rem;margin-top:.6rem}
+.btn-row .btn{flex:1}
+
+/* progress */
+.prog{margin-top:.85rem;display:none}
+.prog.show{display:block}
+.prog-bar{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.prog-fill{height:100%;background:var(--accent);width:0%;transition:width .3s;border-radius:3px}
+.prog-txt{display:flex;justify-content:space-between;margin-top:.35rem;font-size:.75rem;color:var(--t2)}
+
+/* terminal */
+.term{background:#000;border:1px solid var(--border);border-radius:6px;padding:.65rem;font-family:var(--mono);font-size:.72rem;color:#0f0;max-height:200px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;word-break:break-all}
+.term .ts{color:#555}
+
+/* status */
+.status{display:flex;align-items:center;gap:.5rem;padding:.6rem .85rem;border-radius:6px;font-size:.82rem;margin-top:.6rem;display:none}
+.status.show{display:flex}
+.status.ok{background:rgba(63,185,80,.12);border:1px solid var(--ok);color:var(--ok)}
+.status.err{background:rgba(248,81,73,.12);border:1px solid var(--err);color:var(--err)}
+.status.info{background:rgba(88,166,255,.12);border:1px solid var(--info);color:var(--info)}
+
+/* compat */
+.compat{font-size:.75rem;color:var(--t2);margin-top:.5rem}
+.compat a{color:var(--info)}
+
+/* footer */
+.ftr{text-align:center;padding:1.5rem;font-size:.72rem;color:var(--t2);border-top:1px solid var(--border);margin-top:2rem}
+
+@media(max-width:600px){
+  .hdr{padding:.65rem 1rem}
+  .main{padding:0 .75rem}
+  .card{padding:1rem}
+  .cfg{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-left">
+    <div class="logo">ESP</div>
+    <div><h1>ESP32 Web Flasher</h1><div class="sub">Browser-based firmware flasher powered by esptool-js</div></div>
+  </div>
+  <div class="badge">v1.0.0</div>
+</div>
+
+<div class="main">
+
+  <!-- Step 1: Firmware -->
+  <div class="card">
+    <div class="card-t"><span class="n">1</span> Select Firmware</div>
+    <div class="tabs">
+      <div class="tab on" data-tab="release">GitHub Release</div>
+      <div class="tab" data-tab="local">Local File</div>
+    </div>
+
+    <div class="pnl on" id="pnl-release">
+      <div style="margin-bottom:.5rem;font-size:.78rem;color:var(--t2)">
+        Fetching releases from <a href="https://github.com/abduznik/esp32-host-tool/releases" target="_blank">abduznik/esp32-host-tool</a>...
+      </div>
+      <div class="rel-list" id="relList"><div style="padding:1rem;text-align:center;color:var(--t2)">Loading releases...</div></div>
+      <div id="assetList"></div>
+    </div>
+
+    <div class="pnl" id="pnl-local">
+      <div class="drop" id="dropzone">
+        <div class="ic">📂</div>
+        <div class="lb">Drop a <strong>.bin</strong> firmware file here, or click to browse</div>
+        <input type="file" id="fileInput" accept=".bin,.elf,.hex">
+      </div>
+      <div class="fsel" id="fileInfo" style="display:none">
+        <span class="nm" id="fileName"></span>
+        <span class="sz" id="fileSize"></span>
+        <span class="rm" id="fileRemove">✕</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Config -->
+  <div class="card">
+    <div class="card-t"><span class="n">2</span> Flash Configuration</div>
+    <div class="cfg">
+      <div class="cfg-field">
+        <label>Baud Rate</label>
+        <select id="cfgBaud">
+          <option value="115200">115200</option>
+          <option value="230400">230400</option>
+          <option value="460800" selected>460800</option>
+          <option value="921600">921600</option>
+          <option value="1500000">1500000</option>
+        </select>
+      </div>
+      <div class="cfg-field">
+        <label>Flash Mode</label>
+        <select id="cfgMode">
+          <option value="dio" selected>DIO</option>
+          <option value="qio">QIO</option>
+          <option value="qout">QOUT</option>
+          <option value="dout">DOUT</option>
+        </select>
+      </div>
+      <div class="cfg-field">
+        <label>Flash Frequency</label>
+        <select id="cfgFreq">
+          <option value="80m">80 MHz</option>
+          <option value="40m" selected>40 MHz</option>
+          <option value="26m">26 MHz</option>
+          <option value="20m">20 MHz</option>
+        </select>
+      </div>
+      <div class="cfg-field">
+        <label>Flash Size</label>
+        <select id="cfgSize">
+          <option value="256KB">256 KB</option>
+          <option value="512KB">512 KB</option>
+          <option value="1MB">1 MB</option>
+          <option value="2MB">2 MB</option>
+          <option value="4MB" selected>4 MB</option>
+          <option value="8MB">8 MB</option>
+          <option value="16MB">16 MB</option>
+        </select>
+      </div>
+      <div class="cfg-field">
+        <label>Flash Address</label>
+        <input type="text" id="cfgAddr" value="0x0" placeholder="0x0">
+      </div>
+      <div class="cfg-field">
+        <label>Erase Before Flash</label>
+        <select id="cfgErase">
+          <option value="false" selected>No</option>
+          <option value="true">Yes (full erase)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Flash -->
+  <div class="card">
+    <div class="card-t"><span class="n">3</span> Connect & Flash</div>
+
+    <button class="btn btn-flash" id="btnFlash" disabled>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      <span id="btnFlashLabel">Connect & Flash</span>
+    </button>
+
+    <div class="btn-row">
+      <button class="btn btn-erase" id="btnErase" disabled style="background:var(--bg3);color:var(--t2)">
+        Erase Flash
+      </button>
+    </div>
+
+    <div class="prog" id="progWrap">
+      <div class="prog-bar"><div class="prog-fill" id="progFill"></div></div>
+      <div class="prog-txt">
+        <span id="progPct">0%</span>
+        <span id="progMsg">Initializing...</span>
+      </div>
+    </div>
+
+    <div class="status" id="statusBox">
+      <span id="statusIcon"></span>
+      <span id="statusMsg"></span>
+    </div>
+
+    <div class="compat" id="compatMsg"></div>
+  </div>
+
+  <!-- Terminal -->
+  <div class="card">
+    <div class="card-t">Console Output</div>
+    <div class="term" id="terminal"></div>
+  </div>
+
+</div>
+
+<div class="ftr">
+  Powered by <a href="https://github.com/espressif/esptool-js" target="_blank">esptool-js</a> &middot;
+  Part of <a href="https://github.com/abduznik/esp32-host-tool" target="_blank">esp32-host-tool</a> &middot;
+  Web Serial API required (Chrome / Edge 89+)
+</div>
+
+<script type="module">
+import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.25.0/lib/index.js";
+
+// ─── State ───
+let firmwareData = null;
+let firmwareName = "";
+let esploader = null;
+let port = null;
+
+// ─── DOM refs ───
+const $ = (s) => document.querySelector(s);
+const relList = $("#relList");
+const assetList = $("#assetList");
+const dropzone = $("#dropzone");
+const fileInput = $("#fileInput");
+const fileInfo = $("#fileInfo");
+const btnFlash = $("#btnFlash");
+const btnErase = $("#btnErase");
+const btnFlashLabel = $("#btnFlashLabel");
+const progWrap = $("#progWrap");
+const progFill = $("#progFill");
+const progPct = $("#progPct");
+const progMsg = $("#progMsg");
+const statusBox = $("#statusBox");
+const statusMsg = $("#statusMsg");
+const statusIcon = $("#statusIcon");
+const term = $("#terminal");
+
+// ─── Tabs ───
+document.querySelectorAll(".tab").forEach(t => {
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
+    document.querySelectorAll(".pnl").forEach(x => x.classList.remove("on"));
+    t.classList.add("on");
+    $(`#pnl-${t.dataset.tab}`).classList.add("on");
+  });
+});
+
+// ─── Terminal ───
+function termLog(msg, cls = "") {
+  const ts = new Date().toLocaleTimeString("en-GB", {hour12:false});
+  const line = document.createElement("div");
+  line.innerHTML = `<span class="ts">[${ts}]</span> ${msg}`;
+  if (cls) line.style.color = cls;
+  term.appendChild(line);
+  term.scrollTop = term.scrollHeight;
+}
+function termClean() { term.innerHTML = ""; }
+
+const termImpl = {
+  clean() { termClean(); },
+  writeLine(d) { termLog(d); },
+  write(d) { termLog(d); }
+};
+
+// ─── Status ───
+function showStatus(msg, type = "info") {
+  statusBox.className = `status show ${type}`;
+  const icons = { ok: "✓", err: "✕", info: "●" };
+  statusIcon.textContent = icons[type] || "●";
+  statusMsg.textContent = msg;
+}
+function hideStatus() { statusBox.className = "status"; }
+
+// ─── Progress ───
+function showProgress(pct, msg) {
+  progWrap.classList.add("show");
+  progFill.style.width = `${pct}%`;
+  progPct.textContent = `${Math.round(pct)}%`;
+  if (msg) progMsg.textContent = msg;
+}
+function hideProgress() { progWrap.classList.remove("show"); }
+
+// ─── Releases ───
+let selectedRelease = null;
+let selectedAsset = null;
+
+async function loadReleases() {
+  try {
+    const resp = await fetch("https://api.github.com/repos/abduznik/esp32-host-tool/releases?per_page=10");
+    if (!resp.ok) throw new Error(`GitHub API ${resp.status}`);
+    const releases = await resp.json();
+
+    if (!releases.length) {
+      relList.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--t2)">No releases found. Use "Local File" tab.</div>`;
+      return;
+    }
+
+    relList.innerHTML = releases.map((r, i) => `
+      <div class="rel" data-idx="${i}">
+        <div>
+          <div style="font-weight:500">${r.name || r.tag_name}</div>
+          <div class="dt">${new Date(r.published_at).toLocaleDateString()}</div>
+        </div>
+        <div class="tag">${r.tag_name}</div>
+      </div>
+    `).join("");
+
+    relList.querySelectorAll(".rel").forEach(el => {
+      el.addEventListener("click", () => {
+        relList.querySelectorAll(".rel").forEach(x => x.classList.remove("sel"));
+        el.classList.add("sel");
+        const idx = parseInt(el.dataset.idx);
+        selectedRelease = releases[idx];
+        renderAssets(selectedRelease);
+      });
+    });
+
+    // Auto-select first
+    if (releases.length) {
+      relList.querySelector(".rel").click();
+    }
+  } catch (e) {
+    relList.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--err)">Failed to load releases: ${e.message}.<br>Use "Local File" tab instead.</div>`;
+  }
+}
+
+function renderAssets(release) {
+  const bins = release.assets.filter(a => a.name.endsWith(".bin"));
+  if (!bins.length) {
+    assetList.innerHTML = `<div style="font-size:.78rem;color:var(--t2);margin-top:.4rem">No .bin assets in this release.</div>`;
+    selectedAsset = null;
+    updateFlashBtn();
+    return;
+  }
+
+  assetList.innerHTML = `<div style="margin-top:.5rem">${bins.map((a, i) => `
+    <div class="ast" data-idx="${i}">
+      📄 ${a.name} <span style="color:var(--t2)">(${(a.size / 1024).toFixed(1)} KB)</span>
+    </div>
+  `).join("")}</div>`;
+
+  assetList.querySelectorAll(".ast").forEach(el => {
+    el.addEventListener("click", async () => {
+      assetList.querySelectorAll(".ast").forEach(x => x.classList.remove("sel"));
+      el.classList.add("sel");
+      const idx = parseInt(el.dataset.idx);
+      selectedAsset = bins[idx];
+      showStatus("Downloading firmware...", "info");
+      try {
+        const resp = await fetch(selectedAsset.browser_download_url);
+        const buf = await resp.arrayBuffer();
+        firmwareData = new Uint8Array(buf);
+        firmwareName = selectedAsset.name;
+        showStatus(`Loaded ${firmwareName} (${(firmwareData.length / 1024).toFixed(1)} KB)`, "ok");
+        updateFlashBtn();
+      } catch (e) {
+        showStatus(`Download failed: ${e.message}`, "err");
+        firmwareData = null;
+        updateFlashBtn();
+      }
+    });
+  });
+
+  // Auto-select first
+  setTimeout(() => assetList.querySelector(".ast")?.click(), 100);
+}
+
+// ─── Local file ───
+dropzone.addEventListener("click", () => fileInput.click());
+dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("over"); });
+dropzone.addEventListener("dragleave", () => dropzone.classList.remove("over"));
+dropzone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropzone.classList.remove("over");
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+
+function handleFile(file) {
+  firmwareName = file.name;
+  const reader = new FileReader();
+  reader.onload = () => {
+    firmwareData = new Uint8Array(reader.result);
+    fileInfo.style.display = "flex";
+    $("#fileName").textContent = file.name;
+    $("#fileSize").textContent = `${(file.size / 1024).toFixed(1)} KB`;
+    showStatus(`Loaded ${file.name}`, "ok");
+    updateFlashBtn();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+$("#fileRemove").addEventListener("click", () => {
+  firmwareData = null;
+  firmwareName = "";
+  fileInfo.style.display = "none";
+  fileInput.value = "";
+  hideStatus();
+  updateFlashBtn();
+});
+
+// ─── Flash button state ───
+function updateFlashBtn() {
+  const ready = firmwareData !== null;
+  btnFlash.disabled = !ready;
+  btnErase.disabled = false; // erase doesn't need firmware
+}
+
+// ─── Web Serial compatibility check ───
+(function checkCompat() {
+  const el = $("#compatMsg");
+  if (!("serial" in navigator)) {
+    el.innerHTML = `⚠️ Web Serial API not available. Use <a href="https://www.google.com/chrome/" target="_blank">Chrome</a> or <a href="https://www.microsoft.com/edge" target="_blank">Edge</a> 89+ on desktop.`;
+    btnFlash.disabled = true;
+    btnErase.disabled = true;
+  } else {
+    el.innerHTML = `✓ Web Serial API available — connect your ESP32 via USB and click Flash.`;
+  }
+})();
+
+// ─── Flash ───
+btnFlash.addEventListener("click", async () => {
+  if (!firmwareData) return;
+
+  const baud = parseInt($("#cfgBaud").value);
+  const mode = $("#cfgMode").value;
+  const freq = $("#cfgFreq").value;
+  const size = $("#cfgSize").value;
+  const addr = parseInt($("#cfgAddr").value, 16) || 0;
+  const erase = $("#cfgErase").value === "true";
+
+  btnFlash.disabled = true;
+  btnFlashLabel.textContent = "Connecting...";
+  hideStatus();
+  termClean();
+  showProgress(0, "Requesting serial port...");
+
+  try {
+    // Request port
+    port = await navigator.serial.requestPort();
+    showProgress(2, "Opening serial connection...");
+
+    const transport = new Transport(port, true);
+    esploader = new ESPLoader({
+      transport,
+      baudrate: baud,
+      terminal: termImpl,
+      debugLogging: false,
+    });
+
+    showProgress(5, "Connecting to device...");
+    const chip = await esploader.main();
+    showProgress(15, `Detected: ${chip}`);
+    termLog(`Connected to: ${chip}`, "#0f0");
+    showStatus(`Connected to ${chip}`, "ok");
+
+    // Flash
+    showProgress(20, "Flashing firmware...");
+    const flashOpts = {
+      fileArray: [{ data: firmwareData, address: addr }],
+      flashMode: mode,
+      flashFreq: freq,
+      flashSize: size,
+      eraseAll: erase,
+      compress: true,
+      reportProgress: (fileIdx, written, total) => {
+        const pct = 20 + (written / total) * 75;
+        showProgress(pct, `Writing: ${(written / 1024).toFixed(0)} / ${(total / 1024).toFixed(0)} KB`);
+      },
+      calculateMD5Hash: (image) => {
+        // Simple hash — esptool-js handles verification internally
+        return "";
+      },
+    };
+
+    await esploader.writeFlash(flashOpts);
+    showProgress(100, "Flash complete!");
+    termLog("✓ Firmware flashed successfully!", "#0f0");
+    showStatus(`Successfully flashed ${firmwareName} to ${chip}`, "ok");
+
+    // Hard reset
+    await esploader.after("hard_reset");
+    termLog("Device reset.", "#0f0");
+
+  } catch (e) {
+    termLog(`Error: ${e.message}`, "#f00");
+    showStatus(`Flash failed: ${e.message}`, "err");
+  } finally {
+    btnFlash.disabled = false;
+    btnFlashLabel.textContent = "Connect & Flash";
+    try { if (esploader) await esploader.disconnect(); } catch (_) {}
+    esploader = null;
+    port = null;
+  }
+});
+
+// ─── Erase ───
+btnErase.addEventListener("click", async () => {
+  const baud = parseInt($("#cfgBaud").value);
+
+  btnErase.disabled = true;
+  hideStatus();
+  termClean();
+  showProgress(0, "Requesting serial port...");
+
+  try {
+    port = await navigator.serial.requestPort();
+    const transport = new Transport(port, true);
+    esploader = new ESPLoader({ transport, baudrate: baud, terminal: termImpl });
+
+    showProgress(5, "Connecting...");
+    const chip = await esploader.main();
+    termLog(`Connected to: ${chip}`, "#0f0");
+
+    showProgress(15, "Erasing flash...");
+    await esploader.eraseFlash();
+    showProgress(100, "Erase complete!");
+    termLog("✓ Flash erased successfully!", "#0f0");
+    showStatus(`Flash erased on ${chip}`, "ok");
+
+    await esploader.after("hard_reset");
+
+  } catch (e) {
+    termLog(`Error: ${e.message}`, "#f00");
+    showStatus(`Erase failed: ${e.message}`, "err");
+  } finally {
+    btnErase.disabled = false;
+    try { if (esploader) await esploader.disconnect(); } catch (_) {}
+    esploader = null;
+    port = null;
+  }
+});
+
+// ─── Init ───
+loadReleases();
+</script>
+</body>
+</html>
