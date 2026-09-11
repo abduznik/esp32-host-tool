@@ -406,42 +406,17 @@ function renderAssets(release) {
         <span style="color:var(--t2)">Assets: ${assetNames || "none"}</span><br>
         <span style="color:var(--t2)">Use the "Local File" tab to flash a .bin file, or switch to Firmware releases.</span>
       </div>`;
-    selectedAsset = null;
-    updateFlashBtn();
     return;
   }
 
-  assetList.innerHTML = `<div style="margin-top:.5rem">${bins.map((a, i) => `
-    <div class="ast" data-idx="${i}">
-      📄 ${a.name} <span style="color:var(--t2)">(${(a.size / 1024).toFixed(1)} KB)</span>
-    </div>
-  `).join("")}</div>`;
-
-  assetList.querySelectorAll(".ast").forEach(el => {
-    el.addEventListener("click", async () => {
-      assetList.querySelectorAll(".ast").forEach(x => x.classList.remove("sel"));
-      el.classList.add("sel");
-      const idx = parseInt(el.dataset.idx);
-      const asset = bins[idx];
-      showStatus("Downloading firmware...", "info");
-      try {
-        const resp = await fetch(asset.browser_download_url);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const buf = await resp.arrayBuffer();
-        firmwareData = new Uint8Array(buf);
-        firmwareName = asset.name;
-        showStatus(`Loaded ${firmwareName} (${(firmwareData.length / 1024).toFixed(1)} KB)`, "ok");
-        updateFlashBtn();
-      } catch (e) {
-        showStatus(`Download failed: ${e.message}`, "err");
-        firmwareData = null;
-        updateFlashBtn();
-      }
-    });
-  });
-
-  // Auto-select first
-  setTimeout(() => assetList.querySelector(".ast")?.click(), 100);
+  assetList.innerHTML = `<div style="margin-top:.5rem;font-size:.78rem;color:var(--t2);margin-bottom:.4rem">
+    Click to download, then drag the .bin file to the "Local File" tab to flash.
+  </div>${bins.map((a, i) => `
+    <a class="ast" href="${a.browser_download_url}" download="${a.name}" target="_blank" style="display:flex;justify-content:space-between;text-decoration:none">
+      <span>📥 ${a.name}</span>
+      <span style="color:var(--t2)">(${(a.size / 1024).toFixed(1)} KB) ↓</span>
+    </a>
+  `).join("")}`;
 }
 
 // ─── Local file ───
